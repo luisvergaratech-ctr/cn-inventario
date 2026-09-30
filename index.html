@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Sistema de Registro y Control de Equipos de Computo - Centro de Neurodesarrollo La Esperanza">
+<title>Inventario CN La Esperanza</title>
+
+<!-- ============================================================
+     Tailwind CSS vía CDN + configuración de la paleta de marca
+     Paleta institucional tomada del logo:
+       verde  #94BB14   (letra C)
+       rojo   #E80810   (letra N)
+       blanco #FFFFFF   (fondo)
+     Los tonos 600-900 son el mismo verde oscurecido, para que el texto
+     blanco sobre botones y menú cumpla el contraste mínimo AA (4.5:1).
+     ============================================================ -->
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+  // Se protege la asignación por si el CDN no alcanza a cargar (sin conexión).
+  window.tailwind = window.tailwind || {};
+  window.tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          /* Verde del logo (letra C) y sus tonos derivados */
+          brand: {
+            50:  '#F8FAEF',
+            100: '#EEF5D6',
+            200: '#DCEEA0',
+            300: '#C3E45C',
+            400: '#A8D122',
+            500: '#94BB14',   /* Verde exacto del logo          */
+            600: '#617B0F',   /* Verde para texto y botones     */
+            700: '#4E630C',
+            800: '#3A490A',   /* Verde oscuro (menú lateral)    */
+            900: '#263007'
+          },
+          /* Rojo del logo (letra N): acentos y acciones destructivas */
+          accent: {
+            100: '#FDE3E4',
+            300: '#F49297',
+            500: '#E80810',   /* Rojo exacto del logo          */
+            600: '#C60509',
+            700: '#A00407'
+          }
+        },
+        fontFamily: {
+          sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif']
+        }
+      }
+    }
+  }
+</script>
+
+<!-- Tipografía institucional -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  /* ===========================================================
+     ESTILOS PROPIOS  (complementan a Tailwind)
+     =========================================================== */
+  /* La aplicación usa una identidad institucional clara (azul-blanco-rojo)
+     en ambos temas del sistema: se fuerza el esquema claro para que los
+     controles nativos (fechas, listas) conserven el mismo aspecto. */
+  :root{
+    color-scheme: light;
+    --verde-logo:#94BB14; /* verde exacto del logo               */
+    --verde:#617B0F;      /* verde para botones y texto (AA 4.8) */
+    --verde-med:#4E630C;  /* verde de estados :hover             */
+    --verde-osc:#3A490A;  /* verde oscuro (menú lateral)         */
+    --rojo:#E80810;       /* rojo exacto del logo                */
+    --fondo:#F7F9F0;      /* blanco con leve sesgo verde         */
+  }
+  *,*::before,*::after{ box-sizing:border-box; }
+  body{ font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--fondo); color:#1f2937; }
+
+  /* Contenedor con desplazamiento horizontal propio para las tablas:
+     evita que la página completa se desplace de lado en pantallas pequeñas. */
+  .tabla-wrap{ width:100%; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* Barra de desplazamiento discreta */
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:#ccd3b8; border-radius:6px; }
+  ::-webkit-scrollbar-thumb:hover{ background:#adb795; }
+
+  /* Animaciones suaves de entrada */
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+  @keyframes pop{ from{opacity:0; transform:scale(.96)} to{opacity:1; transform:none} }
+  .anim-fade{ animation:fadeUp .28s ease both; }
+  .anim-pop{ animation:pop .18s ease both; }
+
+  /* Enlaces del menú lateral */
+  .nav-link{ display:flex; align-items:center; gap:.7rem; padding:.62rem .85rem; border-radius:.6rem;
+             color:#d3e2ab; font-size:.9rem; font-weight:500; transition:.18s; cursor:pointer; }
+  .nav-link:hover{ background:rgba(255,255,255,.09); color:#fff; }
+  .nav-link.active{ background:#fff; color:var(--verde); font-weight:700;
+                    box-shadow:0 2px 10px rgba(0,0,0,.18); }
+  .nav-link.active .ico{ color:var(--rojo); }
+
+  /* Campos de formulario reutilizables */
+  .inp{ width:100%; border:1px solid #dde2cf; border-radius:.55rem; padding:.55rem .75rem;
+        font-size:.875rem; background:#fff; transition:.15s; outline:none; }
+  .inp:focus{ border-color:var(--verde); box-shadow:0 0 0 3px rgba(97,123,15,.20); }
+  .inp:disabled{ background:#f1f5f9; color:#64748b; }
+  .lbl{ display:block; font-size:.74rem; font-weight:700; text-transform:uppercase;
+        letter-spacing:.04em; color:#59604c; margin-bottom:.3rem; }
+  .req::after{ content:' *'; color:var(--rojo); }
+
+  /* Botones */
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.45rem;
+        padding:.55rem 1rem; border-radius:.55rem; font-size:.875rem; font-weight:600;
+        transition:.16s; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
+  .btn-primary{ background:var(--verde); color:#fff; }
+  .btn-primary:hover{ background:var(--verde-med); }
+  .btn-danger{ background:var(--rojo); color:#fff; }
+  .btn-danger:hover{ background:#C60509; }
+  .btn-rojo{ background:var(--rojo); color:#fff; }
+  .btn-rojo:hover{ background:#C60509; }
+  .btn-ghost{ background:#fff; color:#3b4133; border-color:#dde2cf; }
+  .btn-ghost:hover{ background:#f1f5f9; }
+
+  /* Tablas */
+  .tbl{ width:100%; border-collapse:separate; border-spacing:0; font-size:.85rem; }
+  .tbl thead th{ background:#F2F6E6; color:#4a5140; font-size:.72rem; font-weight:700;
+                 text-transform:uppercase; letter-spacing:.04em; padding:.65rem .8rem;
+                 text-align:left; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+  .tbl tbody td{ padding:.65rem .8rem; border-bottom:1px solid #eef2f7; vertical-align:middle; }
+  .tbl tbody tr:hover{ background:#FAFCF3; }
+
+  /* Etiquetas de estado */
+  .chip{ display:inline-block; padding:.15rem .55rem; border-radius:999px;
+         font-size:.7rem; font-weight:700; letter-spacing:.02em; }
+  .chip-ok{ background:#DCFCE7; color:#15803D; }
+  .chip-off{ background:#F1F5F9; color:#64748b; }
+  .chip-warn{ background:#FEF3C7; color:#92400e; }
+  .chip-bad{ background:#FEE2E2; color:#991b1b; }
+  .chip-info{ background:#E7EEF5; color:#33506B; }
+
+  /* Pantalla de inicio de sesión: identidad en rojo y blanco.
+     Sobrescribe el verde de marca solo dentro de #loginScreen. */
+  #loginScreen .inp:focus{ border-color:var(--rojo); box-shadow:0 0 0 3px rgba(232,8,16,.16); }
+  #loginScreen .lbl{ color:#64748b; }
+  #loginScreen .inp{ border-color:#dfe3e8; }
+  #loginScreen button:focus-visible,
+  #loginScreen a:focus-visible,
+  #loginScreen input:focus-visible{ outline:2px solid var(--rojo); outline-offset:2px; }
+
+  /* Accesibilidad: foco visible con teclado */
+  a:focus-visible, button:focus-visible, .inp:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--rojo); outline-offset:2px;
+  }
+
+  /* Respeta la preferencia de menos movimiento del sistema */
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+  }
+
+  /* Impresión */
+  @media print{
+    #sidebar,#topbar,.no-print{ display:none !important; }
+    #main{ margin:0 !important; padding:0 !important; }
+    body{ background:#fff; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     1) PANTALLA DE INICIO DE SESIÓN
+     Identidad de esta pantalla: únicamente rojo institucional
+     (#E80810 y sus tonos profundos), blanco y grises neutros.
+     ============================================================ -->
+<div id="loginScreen" class="min-h-screen grid lg:grid-cols-[1.05fr_1fr]">
+
+  <!-- ---------- Columna izquierda: panel institucional ---------- -->
+  <div class="relative hidden lg:flex flex-col justify-between overflow-hidden
+              text-white px-12 py-11"
+       style="background:linear-gradient(150deg,#6E0204 0%,#9E0407 48%,#C60509 100%)">
+
+    <!-- Trama diagonal muy tenue, para dar textura sin ruido visual -->
+    <div class="absolute inset-0 pointer-events-none" aria-hidden="true"
+         style="opacity:.07;background-image:repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 15px)"></div>
+    <!-- Anillos concéntricos de acento -->
+    <div class="absolute -right-32 -bottom-36 w-[26rem] h-[26rem] rounded-full border border-white/15" aria-hidden="true"></div>
+    <div class="absolute -right-16 -bottom-52 w-[26rem] h-[26rem] rounded-full border border-white/10" aria-hidden="true"></div>
+
+    <!-- Marca -->
+    <div class="relative flex items-center gap-3.5">
+      <span id="logoBoxLogin"></span>
+      <div class="leading-tight">
+        <p class="font-bold text-[15px] tracking-tight">Centro de Neurodesarrollo</p>
+        <p class="text-[10.5px] font-semibold tracking-[0.24em] text-white/70">LA ESPERANZA</p>
+      </div>
+    </div>
+
+    <!-- Mensaje principal -->
+    <div class="relative max-w-[26rem]">
+      <p class="text-[10.5px] font-bold tracking-[0.22em] text-white/55">SISTEMA DE INFORMACIÓN INTERNO</p>
+      <h1 class="mt-3.5 text-[2.5rem] leading-[1.07] font-extrabold tracking-tight"
+          style="text-wrap:balance">
+        Registro y control de equipos de cómputo
+      </h1>
+      <p class="mt-4 text-[15px] leading-relaxed text-white/75">
+        Administración del parque tecnológico institucional: inventario,
+        licenciamiento y mantenimiento.
+      </p>
+
+      <ul class="mt-9 border-t border-white/15">
+        <li class="flex gap-3 py-3 border-b border-white/15">
+          <svg class="w-[18px] h-[18px] mt-px shrink-0 text-white/55" fill="none" stroke="currentColor"
+               stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20h8" stroke-linecap="round"/></svg>
+          <span class="text-[13.5px] text-white/85">Equipos, hardware y licenciamiento de Office</span>
+        </li>
+        <li class="flex gap-3 py-3 border-b border-white/15">
+          <svg class="w-[18px] h-[18px] mt-px shrink-0 text-white/55" fill="none" stroke="currentColor"
+               stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 1-5.3 5.3L4 17v3h3l5.4-5.4a4 4 0 0 1 5.3-5.3l-2.6 2.6 1.6 1.6 2.6-2.6a4 4 0 0 1-4.6-4.6Z" stroke-linejoin="round"/></svg>
+          <span class="text-[13.5px] text-white/85">Mantenimientos preventivos y correctivos por contratista</span>
+        </li>
+        <li class="flex gap-3 py-3 border-b border-white/15">
+          <svg class="w-[18px] h-[18px] mt-px shrink-0 text-white/55" fill="none" stroke="currentColor"
+               stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 20V9l8-5 8 5v11" stroke-linejoin="round"/><path d="M9 20v-6h6v6"/></svg>
+          <span class="text-[13.5px] text-white/85">Sedes, áreas, proveedores y responsables asignados</span>
+        </li>
+      </ul>
+    </div>
+
+    <p class="relative text-[11px] text-white/50">
+      &copy; <span class="anio"></span> Centro de Neurodesarrollo La Esperanza &nbsp;·&nbsp; Uso interno
+    </p>
+  </div>
+
+  <!-- ---------- Columna derecha: formulario ---------- -->
+  <div class="flex items-center justify-center bg-white px-6 py-12
+              border-t-[3px] border-accent-500 lg:border-t-0">
+    <div class="w-full max-w-[22rem] anim-fade">
+
+      <!-- Marca compacta, solo en pantallas pequeñas -->
+      <div class="lg:hidden flex flex-col items-center text-center mb-9">
+        <span id="logoBoxLoginMobile"></span>
+        <p class="mt-3 text-sm font-bold text-slate-800 leading-tight">
+          Centro de Neurodesarrollo La Esperanza</p>
+        <p class="mt-1 text-[10.5px] font-semibold tracking-[0.2em] text-accent-600">INVENTARIO TI</p>
+      </div>
+
+      <span class="block w-10 h-[3px] rounded-full bg-accent-500 mb-5" aria-hidden="true"></span>
+      <h2 class="text-[1.65rem] font-extrabold tracking-tight text-slate-900">Iniciar sesión</h2>
+      <p class="mt-1.5 text-sm text-slate-500">Ingrese sus credenciales institucionales para continuar.</p>
+
+      <!-- Mensaje de error de validación -->
+      <div id="loginError" role="alert"
+           class="hidden mt-5 flex items-start gap-2.5 rounded-lg border-l-[3px] border-accent-500
+                  bg-accent-100 px-3.5 py-3 text-[13px] text-accent-700 anim-pop">
+        <svg class="w-[18px] h-[18px] mt-px shrink-0" fill="none" stroke="currentColor"
+             stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
+        </svg>
+        <span id="loginErrorText">Usuario o contraseña incorrectos.</span>
+      </div>
+
+      <form id="loginForm" class="mt-6 space-y-4" autocomplete="off">
+        <div>
+          <label class="lbl" for="loginUser">Usuario</label>
+          <div class="relative">
+            <svg class="w-[17px] h-[17px] absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                 fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0" stroke-linecap="round"/>
+            </svg>
+            <input id="loginUser" class="inp pl-9 py-2.5" placeholder="Admin" required>
+          </div>
+        </div>
+
+        <div>
+          <label class="lbl" for="loginPass">Contraseña</label>
+          <div class="relative">
+            <svg class="w-[17px] h-[17px] absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                 fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+            </svg>
+            <input id="loginPass" type="password" class="inp pl-9 pr-11 py-2.5" placeholder="••••••••" required>
+            <button type="button" id="togglePass"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md
+                           text-slate-400 hover:text-accent-600 hover:bg-slate-100"
+                    title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">
+              <svg class="w-[17px] h-[17px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <label class="flex items-center gap-2.5 pt-0.5 text-[13px] text-slate-600 select-none cursor-pointer">
+          <input type="checkbox" id="loginRemember"
+                 class="w-4 h-4 rounded border-slate-300 text-accent-500 focus:ring-accent-500">
+          Mantener la sesión iniciada en este equipo
+        </label>
+
+        <button type="submit" class="btn btn-rojo w-full py-2.5 mt-1 text-[15px]">
+          Ingresar al sistema
+          <svg class="w-[17px] h-[17px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+
+      <!-- Ayuda de credenciales para la fase de pruebas -->
+      <div class="mt-7 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3">
+        <p class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Credenciales de prueba</p>
+        <p class="mt-1.5 text-[13px] text-slate-600">
+          Usuario <span class="font-mono font-bold text-slate-800">Admin</span>
+          &nbsp;·&nbsp;
+          Contraseña <span class="font-mono font-bold text-slate-800">95131131</span>
+        </p>
+      </div>
+
+      <p class="mt-6 text-center text-[11px] leading-relaxed text-slate-400">
+        Acceso restringido al personal autorizado.<br class="hidden sm:block">
+        Ante cualquier novedad, comuníquese con el área de Sistemas.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     2) APLICACIÓN (visible solo con sesión activa)
+     ============================================================ -->
+<div id="appScreen" class="hidden min-h-screen">
+
+  <!-- ---------- MENÚ LATERAL ---------- -->
+  <aside id="sidebar"
+         class="fixed inset-y-0 left-0 z-40 w-64 bg-brand-800 flex flex-col
+                -translate-x-full lg:translate-x-0 transition-transform duration-300">
+
+    <!-- Encabezado / logo -->
+    <div class="px-4 py-4 flex items-center gap-3 border-b border-white/10">
+      <span id="logoBoxApp"></span>
+      <div class="min-w-0">
+        <p class="text-white font-extrabold text-sm leading-tight truncate">CN La Esperanza</p>
+        <p class="text-brand-200 text-[11px] tracking-wide">Inventario TI</p>
+      </div>
+      <button id="closeSidebar" class="lg:hidden ml-auto text-brand-200 hover:text-white p-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Navegación (se genera por JavaScript) -->
+    <nav id="navMenu" class="flex-1 overflow-y-auto px-3 py-4 space-y-1"></nav>
+
+    <!-- Pie del menú: usuario y cierre de sesión -->
+    <div class="px-3 py-3 border-t border-white/10">
+      <div class="flex items-center gap-2.5 px-2 py-2 rounded-lg bg-white/5">
+        <div class="w-8 h-8 rounded-full bg-accent-500 text-white grid place-items-center
+                    text-xs font-extrabold shrink-0">AD</div>
+        <div class="min-w-0 flex-1">
+          <p class="text-white text-xs font-bold truncate" id="sessionUser">Admin</p>
+          <p class="text-brand-200 text-[11px]">Administrador</p>
+        </div>
+        <button id="btnLogout" title="Cerrar sesión"
+                class="text-brand-200 hover:text-accent-300 p-1.5 rounded-md hover:bg-white/10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M15 12H3m0 0 4-4m-4 4 4 4M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Fondo oscuro del menú en móvil -->
+  <div id="overlay" class="hidden fixed inset-0 z-30 bg-slate-900/50 lg:hidden"></div>
+
+  <!-- ---------- CONTENIDO ---------- -->
+  <div class="lg:ml-64 flex flex-col min-h-screen">
+
+    <!-- Barra superior -->
+    <header id="topbar" class="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
+      <div class="flex items-center gap-3 px-4 sm:px-6 h-14">
+        <button id="openSidebar" class="lg:hidden p-2 -ml-2 text-slate-600 hover:text-brand-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <div class="min-w-0">
+          <h1 id="viewTitle" class="text-base sm:text-lg font-extrabold text-slate-800 truncate">Panel general</h1>
+          <p id="viewSubtitle" class="text-[11px] text-slate-500 truncate hidden sm:block">Resumen del inventario</p>
+        </div>
+
+        <div class="ml-auto flex items-center gap-2">
+          <button id="btnBackup" class="btn btn-ghost !py-1.5 !px-2.5 text-xs" title="Descargar copia de seguridad (JSON)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="hidden sm:inline">Respaldo</span>
+          </button>
+          <span class="hidden md:block text-xs text-slate-500 border-l border-slate-200 pl-3" id="todayLabel"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Área donde se dibuja cada vista -->
+    <main id="main" class="flex-1 p-4 sm:p-6"></main>
+
+    <footer class="px-6 py-3 text-center text-[11px] text-slate-400 border-t border-slate-200 bg-white no-print">
+      Centro de Neurodesarrollo La Esperanza &middot; Sistema de Registro y Control de Equipos de Cómputo
+      &middot; <span class="anio"></span>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================
+     3) VENTANA MODAL REUTILIZABLE (formularios y confirmaciones)
+     ============================================================ -->
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div id="modalBackdrop" class="absolute inset-0 bg-slate-900/55 backdrop-blur-[2px]"></div>
+  <div id="modalBox"
+       class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl
+              max-h-[92vh] flex flex-col anim-pop overflow-hidden">
+    <div class="flex items-start gap-3 px-5 py-4 border-b border-slate-200 bg-slate-50">
+      <div id="modalIcon" class="shrink-0"></div>
+      <div class="min-w-0 flex-1">
+        <h3 id="modalTitle" class="font-extrabold text-slate-800 leading-tight">Título</h3>
+        <p id="modalDesc" class="text-xs text-slate-500 mt-0.5"></p>
+      </div>
+      <button id="modalClose" class="text-slate-400 hover:text-accent-500 p-1 -mr-1 -mt-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div id="modalBody" class="px-5 py-4 overflow-y-auto"></div>
+    <div id="modalFooter" class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2"></div>
+  </div>
+</div>
+
+<!-- Contenedor de notificaciones flotantes -->
+<div id="toasts" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[min(92vw,22rem)]"></div>
+
+<script>
+/* ================================================================
+   SISTEMA DE REGISTRO Y CONTROL DE EQUIPOS DE CÓMPUTO
+   Centro de Neurodesarrollo La Esperanza
+   ----------------------------------------------------------------
+   Arquitectura del archivo:
+     A. Utilidades generales
+     B. Capa de datos (localStorage) y datos de ejemplo
+     C. Definición de entidades (esquemas) -> genera los CRUD
+     D. Autenticación y manejo de sesión
+     E. Navegación y enrutamiento de vistas
+     F. Componentes: modal, notificaciones, tabla genérica
+     G. Vistas: Panel, CRUD genérico y módulo de Equipos
+   ================================================================ */
+
+/* ===============================================================
+   A. UTILIDADES GENERALES
+   =============================================================== */
+const $  = (sel, ctx = document) => ctx.querySelector(sel);
+const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+/** Escapa texto para evitar inyección de HTML al pintar datos. */
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+/** Identificador único simple. */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/** Fecha ISO (yyyy-mm-dd) -> dd/mm/aaaa */
+const fFecha = (iso) => {
+  if (!iso) return '—';
+  const [a, m, d] = String(iso).split('-');
+  return (d && m && a) ? `${d}/${m}/${a}` : iso;
+};
+
+/** Días que faltan (negativo = ya venció) entre hoy y una fecha ISO. */
+const diasPara = (iso) => {
+  if (!iso) return null;
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  return Math.round((new Date(iso + 'T00:00:00') - hoy) / 86400000);
+};
+
+/** Normaliza texto para búsquedas (sin tildes, minúsculas). */
+const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Íconos SVG usados en el menú y las tarjetas. */
+const ICONS = {
+  panel:    '<path d="M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z"/>',
+  equipo:   '<path d="M3 5h18v11H3z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>',
+  users:    '<path d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7 8a3 3 0 0 0-5-2.2M5 19a3 3 0 0 1 5-2.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  truck:    '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/><circle cx="17.5" cy="18" r="1.6" fill="currentColor"/>',
+  sede:     '<path d="M4 20V9l8-5 8 5v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="2"/>',
+  area:     '<path d="M4 5h7v6H4zM13 5h7v4h-7zM4 13h7v6H4zM13 11h7v8h-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  tipo:     '<path d="M4 6h16v10H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 20h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  contratista: '<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 16.2a3.2 3.2 0 0 1 6 0M14.5 10h4M14.5 13.5h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  mant:     '<path d="M14.7 6.3a4 4 0 0 1-5.3 5.3L4 17v3h3l5.4-5.4a4 4 0 0 1 5.3-5.3l-2.6 2.6 1.6 1.6 2.6-2.6a4 4 0 0 1-4.6-4.6Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  marca:    '<path d="M12 3l2.6 5.6 6.1.8-4.5 4.2 1.2 6.1L12 16.8 6.6 19.7l1.2-6.1L3.3 9.4l6.1-.8L12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
+};
+const svgIcon = (name, cls = 'w-[18px] h-[18px]') =>
+  `<svg class="${cls} ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[name] || ICONS.panel}</svg>`;
+
+/* Logo institucional del Centro de Neurodesarrollo La Esperanza.
+   Va incrustado como data URI (imagen en base64) para que la aplicación
+   funcione sin conexión y sin depender del sitio web de la institución. */
+const LOGO_URL = 'data:image/png;base64,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';
+
+const logoHTML = (size = 40) =>
+  `<img src="${LOGO_URL}" alt="Centro de Neurodesarrollo La Esperanza"
+        style="width:${size}px;height:${size}px;object-fit:contain"
+        class="rounded-xl bg-white p-1 shadow-sm shrink-0">`;
+
+/* ===============================================================
+   B. CAPA DE DATOS  (persistencia en localStorage)
+   =============================================================== */
+const DB_KEY          = 'cnle_inventario_v2';
+const DB_KEY_ANTERIOR = 'cnle_inventario_v1';   // estructura sin Contratistas
+
+/** Estructura vacía de la base de datos. */
+const dbVacia = () => ({
+  usuarios: [], proveedores: [], sedes: [], areas: [],
+  tiposEquipo: [], marcas: [], contratistas: [], equipos: [], mantenimientos: []
+});
+
+let DB = dbVacia();
+
+function guardarDB() {
+  try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); }
+  catch (e) { toast('No fue posible guardar los datos en este navegador.', 'error'); }
+}
+
+const leerClave = (k) => {
+  try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
+};
+
+/* Convierte los datos de la versión anterior (donde el mantenimiento apuntaba
+   a un usuario como técnico) a la nueva estructura con Contratistas. */
+function migrarDesdeV1(v1) {
+  const d = Object.assign(dbVacia(), v1);
+  d.contratistas = d.contratistas || [];
+  (d.mantenimientos || []).forEach(m => {
+    if (m.contratistaId || !m.tecnicoId) return;
+    const u = (d.usuarios || []).find(x => x.id === m.tecnicoId);
+    const nombre = u ? u.nombre : 'Contratista sin identificar';
+    let c = d.contratistas.find(x => norm(x.nombre) === norm(nombre));
+    if (!c) {
+      c = { id: uid(),
+            idContratista: 'CT-' + String(d.contratistas.length + 1).padStart(3, '0'),
+            nombre, contacto: u ? (u.telefono || '') : '', email: u ? (u.email || '') : '',
+            estado: 'Activo' };
+      d.contratistas.push(c);
+    }
+    m.contratistaId = c.id;
+    delete m.tecnicoId;
+  });
+  return d;
+}
+
+function cargarDB() {
+  const data = leerClave(DB_KEY);
+  if (data) {
+    DB = Object.assign(dbVacia(), data);
+  } else {
+    const v1 = leerClave(DB_KEY_ANTERIOR);
+    if (v1) {
+      DB = migrarDesdeV1(v1);
+      setTimeout(() => toast('Los datos guardados se actualizaron a la nueva estructura con Contratistas.', 'info'), 600);
+    } else {
+      DB = datosDeEjemplo();
+    }
+  }
+  // La fecha de último mantenimiento se recalcula siempre desde el historial.
+  listar('equipos').forEach(e => sincronizarUltMant(e.id));
+  guardarDB();
+}
+
+/* ---- Datos de ejemplo: permiten probar la aplicación de inmediato ---- */
+function datosDeEjemplo() {
+  const d = dbVacia();
+  const id = (p, n) => `${p}${String(n).padStart(2, '0')}`;
+
+  d.sedes = [
+    { id:id('sd',1), nombre:'Sede Principal',   codigo:'SP-01', ciudad:'Valledupar', direccion:'Calle 16 # 12-40', telefono:'6055712345', responsable:'Dirección General', estado:'Activo' },
+    { id:id('sd',2), nombre:'Sede Norte',       codigo:'SN-02', ciudad:'Valledupar', direccion:'Cra 19 # 44-10',  telefono:'6055719876', responsable:'Coordinación Norte', estado:'Activo' }
+  ];
+  d.areas = [
+    { id:id('ar',1), nombre:'Administración',        codigo:'ADM', sedeId:d.sedes[0].id, responsable:'Jefe Administrativo', estado:'Activo' },
+    { id:id('ar',2), nombre:'Terapia Ocupacional',   codigo:'TOC', sedeId:d.sedes[0].id, responsable:'Coordinador Terapias', estado:'Activo' },
+    { id:id('ar',3), nombre:'Psicología',            codigo:'PSI', sedeId:d.sedes[1].id, responsable:'Coordinador Clínico', estado:'Activo' },
+    { id:id('ar',4), nombre:'Sistemas y Tecnología', codigo:'SIS', sedeId:d.sedes[0].id, responsable:'Ingeniero de Sistemas', estado:'Activo' }
+  ];
+  d.usuarios = [
+    { id:id('us',1), nombre:'Luis Vergara',    documento:'1065812345', cargo:'Ingeniero de Sistemas', email:'sistemas@cnlaesperanza.com', telefono:'3001234567', rol:'Administrador', estado:'Activo' },
+    { id:id('us',2), nombre:'Ana María Ochoa', documento:'1002345678', cargo:'Auxiliar Administrativo', email:'admin@cnlaesperanza.com', telefono:'3009876543', rol:'Usuario', estado:'Activo' },
+    { id:id('us',3), nombre:'Carlos Peña',     documento:'1098765432', cargo:'Terapeuta Ocupacional', email:'terapias@cnlaesperanza.com', telefono:'3015558899', rol:'Usuario', estado:'Activo' }
+  ];
+  d.proveedores = [
+    { id:id('pr',1), nombre:'Compudata S.A.S.', nit:'900123456-1', contacto:'Jorge Rivas', telefono:'6055710001', email:'ventas@compudata.com', direccion:'Cra 9 # 14-22', estado:'Activo' },
+    { id:id('pr',2), nombre:'TecnoCesar Ltda.', nit:'830998877-4', contacto:'Marcela Díaz', telefono:'6055710002', email:'contacto@tecnocesar.com', direccion:'Calle 20 # 7-15', estado:'Activo' }
+  ];
+  d.tiposEquipo = [
+    { id:id('tp',1), nombre:'Portátil',     descripcion:'Equipo móvil de uso individual', estado:'Activo' },
+    { id:id('tp',2), nombre:'Escritorio',   descripcion:'Torre, monitor, teclado y mouse', estado:'Activo' },
+    { id:id('tp',3), nombre:'Todo en Uno',  descripcion:'CPU integrada al monitor', estado:'Activo' },
+    { id:id('tp',4), nombre:'Servidor',     descripcion:'Equipo de servicios centralizados', estado:'Activo' }
+  ];
+  d.marcas = [
+    { id:id('mc',1), nombre:'Lenovo', pais:'China',          soporte:'https://support.lenovo.com', estado:'Activo' },
+    { id:id('mc',2), nombre:'Dell',   pais:'Estados Unidos', soporte:'https://www.dell.com/support', estado:'Activo' },
+    { id:id('mc',3), nombre:'HP',     pais:'Estados Unidos', soporte:'https://support.hp.com', estado:'Activo' },
+    { id:id('mc',4), nombre:'Apple',  pais:'Estados Unidos', soporte:'https://support.apple.com', estado:'Activo' }
+  ];
+  d.equipos = [
+    { id:uid(), idEquipo:'EQ-0001', fechaCompra:'2024-03-12', proveedorId:d.proveedores[0].id, sedeId:d.sedes[0].id,
+      areaId:d.areas[0].id, responsableId:d.usuarios[1].id, serialFabrica:'PF3KX9L2', serialExterno:'CNLE-INV-001',
+      tipoId:d.tiposEquipo[1].id, modelo:'ThinkCentre M70q', marcaId:d.marcas[0].id,
+      detalleHardware:'Intel Core i5-12400 · 16 GB RAM DDR4 · SSD 512 GB · Monitor 22"',
+      sistemaOperativo:'Windows 11 Pro', versionOffice:'Microsoft 365 Empresa', cuentaOffice:'admin@cnlaesperanza.com',
+      vigenciaOffice:'2026-11-30', estado:'Activo', observaciones:'Equipo de recepción y facturación.' },
+    { id:uid(), idEquipo:'EQ-0002', fechaCompra:'2023-08-05', proveedorId:d.proveedores[1].id, sedeId:d.sedes[0].id,
+      areaId:d.areas[3].id, responsableId:d.usuarios[0].id, serialFabrica:'5CD1234ABC', serialExterno:'CNLE-INV-002',
+      tipoId:d.tiposEquipo[0].id, modelo:'ProBook 450 G9', marcaId:d.marcas[2].id,
+      detalleHardware:'Intel Core i7-1255U · 16 GB RAM · SSD 1 TB · Pantalla 15.6"',
+      sistemaOperativo:'Windows 11 Pro', versionOffice:'Office 2021 Professional', cuentaOffice:'sistemas@cnlaesperanza.com',
+      vigenciaOffice:'2026-10-15', estado:'Activo', observaciones:'Equipo del área de sistemas.' },
+    { id:uid(), idEquipo:'EQ-0003', fechaCompra:'2022-01-20', proveedorId:d.proveedores[0].id, sedeId:d.sedes[1].id,
+      areaId:d.areas[2].id, responsableId:d.usuarios[2].id, serialFabrica:'DLXR77Q', serialExterno:'CNLE-INV-003',
+      tipoId:d.tiposEquipo[2].id, modelo:'Inspiron 24 5410', marcaId:d.marcas[1].id,
+      detalleHardware:'Intel Core i5-1235U · 8 GB RAM · SSD 256 GB · Todo en uno 23.8"',
+      sistemaOperativo:'Windows 10 Pro', versionOffice:'Office 2019 Hogar y Empresas', cuentaOffice:'psicologia@cnlaesperanza.com',
+      vigenciaOffice:'2026-09-25', estado:'En mantenimiento', observaciones:'Pendiente cambio de memoria RAM.' }
+  ];
+  d.contratistas = [
+    { id:id('ct',1), idContratista:'CT-001', nombre:'Soluciones TI del Cesar S.A.S.', contacto:'Jorge Rivas · 3004458899', email:'soporte@solucionesti.com', estado:'Activo' },
+    { id:id('ct',2), idContratista:'CT-002', nombre:'Andrés Molina (independiente)',  contacto:'3157781122', email:'amolina.tecnico@gmail.com', estado:'Activo' },
+    { id:id('ct',3), idContratista:'CT-003', nombre:'ServiTech Valledupar',           contacto:'Marcela Díaz · 6055710055', email:'servicio@servitechvpar.com', estado:'Activo' }
+  ];
+  d.mantenimientos = [
+    { id:uid(), equipoId:d.equipos[2].id, fecha:'2026-09-02', hora:'09:30', tipo:'Correctivo',
+      contratistaId:d.contratistas[0].id,
+      detalles:'Diagnóstico por pantallazos azules. Se identificó módulo de memoria RAM defectuoso; se solicitó repuesto al proveedor.' },
+    { id:uid(), equipoId:d.equipos[0].id, fecha:'2026-08-14', hora:'14:00', tipo:'Preventivo',
+      contratistaId:d.contratistas[1].id,
+      detalles:'Limpieza interna de polvo, cambio de pasta térmica, desfragmentación y actualización de Windows.' },
+    { id:uid(), equipoId:d.equipos[1].id, fecha:'2026-07-28', hora:'08:15', tipo:'Preventivo',
+      contratistaId:d.contratistas[2].id,
+      detalles:'Limpieza de teclado y ventilación, revisión de batería (87% de salud) y respaldo de información del usuario.' }
+  ];
+  return d;
+}
+
+/** Siguiente código consecutivo de una colección: EQ-0001, CT-001, … */
+const siguienteCodigo = (ent, campo, prefijo, largo) => {
+  const nums = (DB[ent] || []).map(r => parseInt(String(r[campo]).replace(/\D/g, ''), 10) || 0);
+  return prefijo + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(largo, '0');
+};
+
+/* Utilidades de consulta sobre la base de datos */
+const listar  = (ent) => DB[ent] || [];
+const buscarId = (ent, id) => (DB[ent] || []).find(r => r.id === id);
+
+/* Cómo se nombra cada registro cuando aparece en un desplegable o en una tabla.
+   La mayoría usa el campo "nombre"; los equipos necesitan una etiqueta compuesta. */
+const ETIQUETAS_REF = {
+  equipos: (e) => `${e.idEquipo} · ${nombreDe('marcas', e.marcaId)} ${e.modelo || ''}`.trim()
+};
+const etiquetaRef = (ent, r) => !r ? '—'
+  : (ETIQUETAS_REF[ent] ? ETIQUETAS_REF[ent](r) : (r.nombre || r.idEquipo || '—'));
+const nombreDe = (ent, id) => etiquetaRef(ent, buscarId(ent, id));
+
+/* Mantenimientos registrados para un equipo, del más reciente al más antiguo. */
+const mantenimientosDe = (equipoId) => listar('mantenimientos')
+  .filter(m => m.equipoId === equipoId)
+  .sort((a, b) => `${b.fecha} ${b.hora}`.localeCompare(`${a.fecha} ${a.hora}`));
+
+/* ===============================================================
+   C. DEFINICIÓN DE ENTIDADES (esquemas)
+   Cada entrada genera automáticamente su listado y su formulario.
+   =============================================================== */
+const OPC_ESTADO = ['Activo', 'Inactivo'];
+
+const SCHEMAS = {
+  usuarios: {
+    titulo:'Usuarios', singular:'Usuario', icono:'users',
+    subtitulo:'Usuarios del sistema y responsables de equipos',
+    columnas:[
+      { k:'nombre', t:'Nombre completo', bold:true },
+      { k:'documento', t:'Documento' },
+      { k:'cargo', t:'Cargo' },
+      { k:'email', t:'Correo' },
+      { k:'rol', t:'Rol', tipo:'chipInfo' },
+      { k:'estado', t:'Estado', tipo:'chipEstado' }
+    ],
+    campos:[
+      { k:'nombre', l:'Nombre completo', t:'text', req:true, ph:'Ej: Ana María Ochoa' },
+      { k:'documento', l:'Documento de identidad', t:'text', ph:'Ej: 1002345678' },
+      { k:'cargo', l:'Cargo', t:'text', ph:'Ej: Auxiliar Administrativo' },
+      { k:'email', l:'Correo electrónico', t:'email', ph:'usuario@cnlaesperanza.com' },
+      { k:'telefono', l:'Teléfono', t:'tel', ph:'Ej: 3001234567' },
+      { k:'rol', l:'Rol', t:'select', opc:['Administrador','Usuario','Técnico de soporte'], req:true },
+      { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo' }
+    ]
+  },
+
+  proveedores: {
+    titulo:'Proveedores', singular:'Proveedor', icono:'truck',
+    subtitulo:'Empresas que suministran equipos y servicios tecnológicos',
+    columnas:[
+      { k:'nombre', t:'Razón social', bold:true },
+      { k:'nit', t:'NIT' },
+      { k:'contacto', t:'Contacto' },
+      { k:'telefono', t:'Teléfono' },
+      { k:'email', t:'Correo' },
+      { k:'estado', t:'Estado', tipo:'chipEstado' }
+    ],
+    campos:[
+      { k:'nombre', l:'Razón social', t:'text', req:true, ph:'Ej: Compudata S.A.S.' },
+      { k:'nit', l:'NIT', t:'text', ph:'Ej: 900123456-1' },
+      { k:'contacto', l:'Persona de contacto', t:'text' },
+      { k:'telefono', l:'Teléfono', t:'tel' },
+      { k:'email', l:'Correo electrónico', t:'email' },
+      { k:'direccion', l:'Dirección', t:'text', full:true },
+      { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo' }
+    ]
+  },
+
+  sedes: {
+    titulo:'Sedes', singular:'Sede', icono:'sede',
+    subtitulo:'Ubicaciones físicas de la institución',
+    columnas:[
+      { k:'nombre', t:'Sede', bold:true },
+      { k:'codigo', t:'Código' },
+      { k:'ciudad', t:'Ciudad' },
+      { k:'direccion', t:'Dirección' },
+      { k:'responsable', t:'Responsable' },
+      { k:'estado', t:'Estado', tipo:'chipEstado' }
+    ],
+    campos:[
+      { k:'nombre', l:'Nombre de la sede', t:'text', req:true, ph:'Ej: Sede Principal' },
+      { k:'codigo', l:'Código', t:'text', ph:'Ej: SP-01' },
+      { k:'ciudad', l:'Ciudad', t:'text' },
+      { k:'direccion', l:'Dirección', t:'text', full:true },
+      { k:'telefono', l:'Teléfono', t:'tel' },
+      { k:'responsable', l:'Responsable', t:'text' },
+      { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo' }
+    ]
+  },
+
+  areas: {
+    titulo:'Áreas de la empresa', singular:'Área', icono:'area',
+    subtitulo:'Dependencias internas asociadas a cada sede',
+    columnas:[
+      { k:'nombre', t:'Área', bold:true },
+      { k:'codigo', t:'Código' },
+      { k:'sedeId', t:'Sede', tipo:'ref', ref:'sedes' },
+      { k:'responsable', t:'Responsable' },
+      { k:'estado', t:'Estado', tipo:'chipEstado' }
+    ],
+    campos:[
+      { k:'nombre', l:'Nombre del área', t:'text', req:true, ph:'Ej: Terapia Ocupacional' },
+      { k:'codigo', l:'Código', t:'text', ph:'Ej: TOC' },
+      { k:'sedeId', l:'Sede', t:'ref', ref:'sedes', req:true },
+      { k:'responsable', l:'Responsable', t:'text' },
+      { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo' }
+    ]
+  },
+
+  tiposEquipo: {
+    titulo:'Tipos de equipo', singular:'Tipo de equipo', icono:'tipo',
+    subtitulo:'Clasificación de los equipos de cómputo',
+    columnas:[
+      { k:'nombre', t:'Tipo', bold:true },
+      { k:'descripcion', t:'Descripción' },
+      { k:'estado', t:'Estado', tipo:'chipEstado' }
+    ],
+    campos:[
+      { k:'nombre', l:'Nombre del tipo', t:'text', req:true, ph:'Ej: Portátil, Escritorio, Servidor' },
+      { k:'descripcion', l:'Descripción', t:'textarea', full:true },
+      { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo' }
+    ]
+  },
+
+  marcas: {
+    titulo:'Marcas', singular:'Marca', icono:'marca',
+    subtitulo:'Fabricantes de los equipos registrados',
+    columnas:[
+      { k:'nombre', t:'Marca', bold:true },
+      { k:'pais', t:'País de origen' },
+      { k:'soporte', t:'Portal de soporte', tipo:'url' },
+      { k:'estado', t:'Estado', tipo:'chipEstado' }
+    ],
+    campos:[
+      { k:'nombre', l:'Nombre de la marca', t:'text', req:true, ph:'Ej: Lenovo, Dell, HP, Apple' },
+      { k:'pais', l:'País de origen', t:'text' },
+      { k:'soporte', l:'Portal de soporte (URL)', t:'text', ph:'https://...', full:true },
+      { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo' }
+    ]
+  }
+};
+
+SCHEMAS.contratistas = {
+  titulo:'Contratistas', singular:'Contratista', icono:'contratista',
+  subtitulo:'Personas o empresas que ejecutan los mantenimientos',
+  unicos:['idContratista', 'nombre'],
+  columnas:[
+    { k:'idContratista', t:'ID', tipo:'codigo' },
+    { k:'nombre', t:'Nombre del contratista', bold:true },
+    { k:'contacto', t:'Contacto' },
+    { k:'email', t:'Correo' },
+    { k:'estado', t:'Estado', tipo:'chipEstado' }
+  ],
+  campos:[
+    { k:'idContratista', l:'ID del contratista', t:'text', req:true,
+      def:() => siguienteCodigo('contratistas', 'idContratista', 'CT-', 3),
+      help:'Código interno único. Se propone el siguiente consecutivo.' },
+    { k:'nombre', l:'Nombre del contratista', t:'text', req:true,
+      ph:'Ej: Soluciones TI del Cesar S.A.S. o Andrés Molina' },
+    { k:'contacto', l:'Contacto', t:'text', ph:'Teléfono o persona de contacto' },
+    { k:'email', l:'Correo electrónico', t:'email', ph:'contratista@correo.com' },
+    { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo',
+      help:'Los contratistas inactivos dejan de aparecer en el formulario de mantenimiento.' }
+  ]
+};
+
+/* Hoy y ahora, en el formato que esperan los campos date y time */
+const hoyISO  = () => new Date().toISOString().slice(0, 10);
+const ahoraHM = () => new Date().toTimeString().slice(0, 5);
+
+/* Mantenimientos: no tiene campo "nombre", por eso se marca sinNombre
+   y se define un descriptor propio para los mensajes de confirmación. */
+SCHEMAS.mantenimientos = {
+  titulo:'Mantenimientos', singular:'Mantenimiento', icono:'mant',
+  subtitulo:'Historial de mantenimientos preventivos y correctivos por equipo',
+  sinNombre:true,
+  descriptor:(r) => `mantenimiento ${String(r.tipo || '').toLowerCase()} del ${fFecha(r.fecha)} · ${nombreDe('equipos', r.equipoId)}`,
+  orden:(a, b) => `${b.fecha} ${b.hora}`.localeCompare(`${a.fecha} ${a.hora}`),
+  columnas:[
+    { k:'fecha', t:'Fecha', tipo:'fecha', bold:true },
+    { k:'hora', t:'Hora', tipo:'hora' },
+    { k:'equipoId', t:'Equipo', tipo:'ref', ref:'equipos' },
+    { k:'tipo', t:'Tipo', tipo:'chipTipoMant' },
+    { k:'contratistaId', t:'Contratista', tipo:'ref', ref:'contratistas' },
+    { k:'detalles', t:'Detalles del mantenimiento', tipo:'texto' }
+  ],
+  campos:[
+    { k:'equipoId', l:'Equipo intervenido', t:'ref', ref:'equipos', req:true, full:true },
+    { k:'fecha', l:'Fecha del mantenimiento', t:'date', req:true, def:hoyISO },
+    { k:'hora', l:'Hora', t:'time', req:true, def:ahoraHM },
+    { k:'tipo', l:'Tipo de mantenimiento', t:'select', opc:['Preventivo','Correctivo'], req:true, def:'Preventivo',
+      help:'Preventivo: programado. Correctivo: por una falla.' },
+    { k:'contratistaId', l:'Contratista responsable', t:'ref', ref:'contratistas', req:true,
+      help:'Se administra en el módulo Contratistas.' },
+    { k:'detalles', l:'Detalles del mantenimiento', t:'textarea', req:true, full:true,
+      ph:'Describa la actividad realizada, los repuestos usados y el estado en que quedó el equipo.' }
+  ]
+};
+
+/* Esquema del módulo principal: EQUIPOS DE CÓMPUTO */
+const SCHEMA_EQUIPOS = {
+  titulo:'Equipos de cómputo', singular:'Equipo', icono:'equipo',
+  subtitulo:'Registro y control del parque tecnológico institucional',
+  descriptor:(r) => `el equipo ${etiquetaRef('equipos', r)}`,
+  unicos:['idEquipo'],
+  campos:[
+    /* --- Identificación --- */
+    { g:'Identificación del equipo' },
+    { k:'idEquipo', l:'ID del equipo', t:'text', req:true, ph:'EQ-0001',
+      def:() => siguienteCodigo('equipos', 'idEquipo', 'EQ-', 4),
+      help:'Código interno único. Se propone el siguiente consecutivo.' },
+    { k:'fechaCompra', l:'Fecha de compra', t:'date', req:true },
+    { k:'fechaUltMant', l:'Fecha de último mantenimiento', t:'date',
+      help:'Se actualiza sola al registrar un mantenimiento. Edítela solo para historial anterior al sistema.' },
+    { k:'proveedorId', l:'Proveedor', t:'ref', ref:'proveedores', req:true },
+    { k:'estado', l:'Estado del equipo', t:'select', req:true, def:'Activo',
+      opc:['Activo','En mantenimiento','En bodega','Dado de baja'] },
+
+    /* --- Ubicación y responsable --- */
+    { g:'Ubicación y responsable' },
+    { k:'sedeId', l:'Sede', t:'ref', ref:'sedes', req:true },
+    { k:'areaId', l:'Área', t:'ref', ref:'areas', req:true, dependeDe:'sedeId', campoPadre:'sedeId' },
+    { k:'responsableId', l:'Responsable', t:'ref', ref:'usuarios', req:true },
+
+    /* --- Características técnicas --- */
+    { g:'Características técnicas' },
+    { k:'tipoId', l:'Tipo de equipo', t:'ref', ref:'tiposEquipo', req:true },
+    { k:'marcaId', l:'Marca', t:'ref', ref:'marcas', req:true },
+    { k:'modelo', l:'Modelo', t:'text', req:true, ph:'Ej: ThinkCentre M70q' },
+    { k:'serialFabrica', l:'Serial de fábrica', t:'text', req:true, ph:'Serial impreso por el fabricante' },
+    { k:'serialExterno', l:'Serial externo / placa', t:'text', ph:'Ej: CNLE-INV-001' },
+    { k:'detalleHardware', l:'Detalle de hardware', t:'textarea', full:true,
+      ph:'Procesador · Memoria RAM · Almacenamiento · Pantalla · Periféricos' },
+
+    /* --- Software y licenciamiento --- */
+    { g:'Software y licenciamiento' },
+    { k:'sistemaOperativo', l:'Sistema operativo', t:'select', req:true, listaLibre:true,
+      opc:['Windows 11 Pro','Windows 11 Home','Windows 10 Pro','Windows Server 2022','macOS','Ubuntu Linux','Otro'] },
+    { k:'versionOffice', l:'Versión de Office', t:'select', listaLibre:true,
+      opc:['Microsoft 365 Empresa','Microsoft 365 Personal','Office 2021 Professional','Office 2019 Hogar y Empresas','Office 2016','LibreOffice','Sin Office'] },
+    { k:'cuentaOffice', l:'Cuenta de Office asociada', t:'email', ph:'usuario@cnlaesperanza.com' },
+    { k:'vigenciaOffice', l:'Vigencia de la cuenta Office', t:'date',
+      help:'El panel avisa cuando falten 60 días o menos.' },
+    { k:'observaciones', l:'Observaciones', t:'textarea', full:true }
+  ]
+};
+
+/** Devuelve el esquema de cualquier colección, incluida la de equipos. */
+const esquemaDe = (ent) => (ent === 'equipos') ? SCHEMA_EQUIPOS : SCHEMAS[ent];
+
+/* ===============================================================
+   D. AUTENTICACIÓN Y SESIÓN
+   =============================================================== */
+const CRED = { usuario:'Admin', clave:'95131131' };   // Credenciales por defecto
+const SESION_KEY = 'cnle_sesion';
+
+function haySesion() {
+  return sessionStorage.getItem(SESION_KEY) === 'ok' ||
+         localStorage.getItem(SESION_KEY) === 'ok';
+}
+function abrirSesion(recordar) {
+  sessionStorage.setItem(SESION_KEY, 'ok');
+  if (recordar) localStorage.setItem(SESION_KEY, 'ok');
+}
+function cerrarSesion() {
+  sessionStorage.removeItem(SESION_KEY);
+  localStorage.removeItem(SESION_KEY);
+  location.reload();
+}
+
+function mostrarLoginError(msg) {
+  const box = $('#loginError');
+  $('#loginErrorText').textContent = msg;
+  box.classList.remove('hidden');
+  box.classList.remove('anim-pop'); void box.offsetWidth; box.classList.add('anim-pop');
+}
+
+function initLogin() {
+  $('#loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const u = $('#loginUser').value.trim();
+    const p = $('#loginPass').value;
+
+    if (!u || !p) { mostrarLoginError('Debe diligenciar usuario y contraseña.'); return; }
+
+    // Validación de credenciales (comparación sin distinguir mayúsculas en el usuario)
+    if (u.toLowerCase() !== CRED.usuario.toLowerCase() || p !== CRED.clave) {
+      mostrarLoginError('Usuario o contraseña incorrectos. Verifique e intente nuevamente.');
+      $('#loginPass').value = '';
+      $('#loginPass').focus();
+      return;
+    }
+    abrirSesion($('#loginRemember').checked);
+    entrarApp();
+  });
+
+  $('#togglePass').addEventListener('click', () => {
+    const i = $('#loginPass');
+    i.type = i.type === 'password' ? 'text' : 'password';
+  });
+}
+
+function entrarApp() {
+  $('#loginScreen').classList.add('hidden');
+  $('#appScreen').classList.remove('hidden');
+  $('#appScreen').classList.add('anim-fade');
+  construirMenu();
+  irA('panel');
+}
+
+/* ===============================================================
+   F. COMPONENTES: notificaciones y ventana modal
+   =============================================================== */
+function toast(msg, tipo = 'ok') {
+  const colores = {
+    ok:    'bg-emerald-600',
+    error: 'bg-accent-500',
+    info:  'bg-brand-600',
+    warn:  'bg-amber-500'
+  };
+  const el = document.createElement('div');
+  el.className = `${colores[tipo] || colores.ok} text-white text-sm rounded-lg shadow-lg
+                  px-4 py-3 anim-pop flex items-start gap-2`;
+  el.innerHTML = `<span class="flex-1">${esc(msg)}</span>`;
+  $('#toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0';
+                     setTimeout(() => el.remove(), 320); }, 3200);
+}
+
+let _modalOnClose = null;
+function abrirModal({ titulo, desc = '', cuerpo, pie, ancho = 'max-w-2xl', icono = '' }) {
+  $('#modalTitle').textContent = titulo;
+  $('#modalDesc').textContent = desc;
+  $('#modalIcon').innerHTML = icono;
+  $('#modalBody').innerHTML = cuerpo;
+  $('#modalFooter').innerHTML = '';
+  (pie || []).forEach(b => $('#modalFooter').appendChild(b));
+  $('#modalBox').className = `relative bg-white rounded-2xl shadow-2xl w-full ${ancho}
+                              max-h-[92vh] flex flex-col anim-pop overflow-hidden`;
+  $('#modal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+function cerrarModal() {
+  $('#modal').classList.add('hidden');
+  document.body.style.overflow = '';
+  if (_modalOnClose) { const f = _modalOnClose; _modalOnClose = null; f(); }
+}
+
+/** Diálogo de confirmación (usado antes de eliminar). */
+function confirmar({ titulo, mensaje, textoOk = 'Eliminar', onOk }) {
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'btn btn-ghost'; btnCancel.textContent = 'Cancelar';
+  btnCancel.onclick = cerrarModal;
+
+  const btnOk = document.createElement('button');
+  btnOk.className = 'btn btn-danger'; btnOk.textContent = textoOk;
+  btnOk.onclick = () => { cerrarModal(); onOk(); };
+
+  abrirModal({
+    titulo, ancho:'max-w-md',
+    icono:`<span class="w-9 h-9 grid place-items-center rounded-full bg-accent-100 text-accent-600">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+               <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                     stroke-linecap="round" stroke-linejoin="round"/></svg></span>`,
+    cuerpo:`<p class="text-sm text-slate-600 leading-relaxed">${mensaje}</p>`,
+    pie:[btnCancel, btnOk]
+  });
+}
+</script>
+
+<script>
+/* ===============================================================
+   E. NAVEGACIÓN Y ENRUTAMIENTO DE VISTAS
+   =============================================================== */
+const VISTAS = [
+  { id:'panel',   titulo:'Panel general', sub:'Resumen del inventario tecnológico', icono:'panel',  grupo:'Principal' },
+  { id:'equipos', titulo:'Equipos de cómputo', sub:SCHEMA_EQUIPOS.subtitulo, icono:'equipo', grupo:'Principal' },
+  { id:'mantenimientos', titulo:'Mantenimientos', sub:SCHEMAS.mantenimientos.subtitulo, icono:'mant', grupo:'Principal' },
+  { id:'usuarios',    titulo:'Usuarios',            sub:SCHEMAS.usuarios.subtitulo,    icono:'users', grupo:'Administración' },
+  { id:'proveedores', titulo:'Proveedores',         sub:SCHEMAS.proveedores.subtitulo, icono:'truck', grupo:'Administración' },
+  { id:'sedes',       titulo:'Sedes',               sub:SCHEMAS.sedes.subtitulo,       icono:'sede',  grupo:'Administración' },
+  { id:'areas',       titulo:'Áreas de la empresa', sub:SCHEMAS.areas.subtitulo,       icono:'area',  grupo:'Administración' },
+  { id:'tiposEquipo', titulo:'Tipos de equipo',     sub:SCHEMAS.tiposEquipo.subtitulo, icono:'tipo',  grupo:'Administración' },
+  { id:'marcas',      titulo:'Marcas',              sub:SCHEMAS.marcas.subtitulo,      icono:'marca', grupo:'Administración' },
+  { id:'contratistas',titulo:'Contratistas',        sub:SCHEMAS.contratistas.subtitulo,icono:'contratista', grupo:'Administración' }
+];
+
+let vistaActual = 'panel';
+const filtros = {};   // guarda el texto de búsqueda por vista
+
+function construirMenu() {
+  const nav = $('#navMenu');
+  let html = '', grupoPrev = '';
+  VISTAS.forEach(v => {
+    if (v.grupo !== grupoPrev) {
+      grupoPrev = v.grupo;
+      html += `<p class="px-3 pt-4 pb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-brand-300">${v.grupo}</p>`;
+    }
+    html += `<a class="nav-link" data-vista="${v.id}">${svgIcon(v.icono)}<span>${esc(v.titulo)}</span>
+               <span class="ml-auto text-[10px] font-bold opacity-70" data-badge="${v.id}"></span></a>`;
+  });
+  nav.innerHTML = html;
+  $$('#navMenu .nav-link').forEach(a =>
+    a.addEventListener('click', () => { irA(a.dataset.vista); cerrarSidebar(); }));
+}
+
+function actualizarBadges() {
+  VISTAS.forEach(v => {
+    const el = $(`[data-badge="${v.id}"]`);
+    if (!el) return;
+    el.textContent = (v.id === 'panel') ? '' : (DB[v.id] ? DB[v.id].length : '');
+  });
+}
+
+function irA(id) {
+  vistaActual = id;
+  const v = VISTAS.find(x => x.id === id) || VISTAS[0];
+  $('#viewTitle').textContent = v.titulo;
+  $('#viewSubtitle').textContent = v.sub;
+  $$('#navMenu .nav-link').forEach(a => a.classList.toggle('active', a.dataset.vista === id));
+
+  if (id === 'panel')        renderPanel();
+  else if (id === 'equipos') renderEquipos();
+  else                       renderEntidad(id);
+
+  actualizarBadges();
+  window.scrollTo({ top: 0 });
+}
+
+function cerrarSidebar() {
+  $('#sidebar').classList.add('-translate-x-full');
+  $('#overlay').classList.add('hidden');
+}
+function abrirSidebar() {
+  $('#sidebar').classList.remove('-translate-x-full');
+  $('#overlay').classList.remove('hidden');
+}
+
+/* ===============================================================
+   G.1  CONSTRUCTOR GENÉRICO DE FORMULARIOS
+   =============================================================== */
+
+/** Opciones disponibles para un campo de tipo referencia. */
+function opcionesRef(campo, registro, valoresActuales) {
+  const seleccionado = registro ? registro[campo.k] : null;
+  // Solo se ofrecen registros activos; si el registro que se edita apunta a uno
+  // inactivo, ese se conserva para no perder la información histórica.
+  let lista = listar(campo.ref).filter(r => r.estado !== 'Inactivo' || r.id === seleccionado);
+  if (campo.campoPadre) {
+    const padre = valoresActuales ? valoresActuales[campo.campoPadre] : (registro || {})[campo.campoPadre];
+    lista = padre ? lista.filter(r => r[campo.campoPadre] === padre) : [];
+  }
+  return lista.sort((a, b) => etiquetaRef(campo.ref, a).localeCompare(etiquetaRef(campo.ref, b), 'es'));
+}
+
+/** Genera el HTML de un campo del formulario. */
+function campoHTML(c, val, registro) {
+  if (c.g) return `<div class="sm:col-span-2 mt-2 first:mt-0">
+      <p class="text-[11px] font-extrabold uppercase tracking-wider text-brand-600
+                border-b border-brand-100 pb-1.5">${esc(c.g)}</p></div>`;
+
+  const req = c.req ? 'required' : '';
+  const lbl = `<label class="lbl ${c.req ? 'req' : ''}" for="f_${c.k}">${esc(c.l)}</label>`;
+  const help = c.help ? `<p class="text-[11px] text-slate-400 mt-1">${esc(c.help)}</p>` : '';
+  let input = '';
+
+  if (c.t === 'textarea') {
+    input = `<textarea id="f_${c.k}" name="${c.k}" rows="3" class="inp" ${req}
+              placeholder="${esc(c.ph || '')}">${esc(val || '')}</textarea>`;
+
+  } else if (c.t === 'select' && c.listaLibre) {
+    // Lista sugerida pero editable (permite escribir un valor no listado)
+    input = `<input id="f_${c.k}" name="${c.k}" class="inp" list="dl_${c.k}" ${req}
+              value="${esc(val || '')}" placeholder="${esc(c.ph || 'Seleccione o escriba')}">
+             <datalist id="dl_${c.k}">${c.opc.map(o => `<option value="${esc(o)}">`).join('')}</datalist>`;
+
+  } else if (c.t === 'select') {
+    input = `<select id="f_${c.k}" name="${c.k}" class="inp" ${req}>
+               <option value="">Seleccione…</option>
+               ${c.opc.map(o => `<option value="${esc(o)}" ${String(val) === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+             </select>`;
+
+  } else if (c.t === 'ref') {
+    const ops = opcionesRef(c, registro, registro);
+    const vacio = ops.length === 0;
+    input = `<select id="f_${c.k}" name="${c.k}" class="inp" ${req} data-ref="${c.ref}"
+               ${c.campoPadre ? `data-padre="${c.campoPadre}"` : ''}>
+               <option value="">${vacio ? 'Sin registros disponibles' : 'Seleccione…'}</option>
+               ${ops.map(o => `<option value="${o.id}" ${val === o.id ? 'selected' : ''}>${esc(etiquetaRef(c.ref, o))}</option>`).join('')}
+             </select>
+             ${vacio ? `<p class="text-[11px] text-accent-600 mt-1">
+                 Primero registre datos en el módulo <b>${esc(esquemaDe(c.ref) ? esquemaDe(c.ref).titulo : c.ref)}</b>.</p>` : ''}`;
+
+  } else {
+    input = `<input id="f_${c.k}" name="${c.k}" type="${c.t || 'text'}" class="inp" ${req}
+              value="${esc(val || '')}" placeholder="${esc(c.ph || '')}">`;
+  }
+
+  return `<div class="${c.full ? 'sm:col-span-2' : ''}">${lbl}${input}${help}</div>`;
+}
+
+/** Abre el formulario (crear o editar) de cualquier entidad. */
+function abrirFormulario(entidad, schema, registro, preset) {
+  const esNuevo = !registro;
+  // "preset" permite abrir el formulario con campos ya diligenciados
+  // (por ejemplo, registrar un mantenimiento desde la ficha de un equipo).
+  const datos = registro || Object.assign({}, preset || {});
+
+  // Valores por defecto para registros nuevos
+  schema.campos.forEach(c => {
+    if (esNuevo && c.def && datos[c.k] === undefined)
+      datos[c.k] = (typeof c.def === 'function') ? c.def() : c.def;
+  });
+
+  const cuerpo = `
+    <form id="formEnt" class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5" autocomplete="off">
+      ${schema.campos.map(c => campoHTML(c, datos[c.k], datos)).join('')}
+      <p id="formError" class="sm:col-span-2 hidden text-sm text-accent-600 bg-accent-100
+           border border-accent-300 rounded-lg px-3 py-2"></p>
+    </form>`;
+
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'btn btn-ghost'; btnCancel.textContent = 'Cancelar';
+  btnCancel.onclick = cerrarModal;
+
+  const btnSave = document.createElement('button');
+  btnSave.className = 'btn btn-primary';
+  btnSave.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      ${esNuevo ? 'Guardar registro' : 'Actualizar registro'}`;
+  btnSave.onclick = () => guardarFormulario(entidad, schema, registro);
+
+  abrirModal({
+    titulo: `${esNuevo ? 'Nuevo' : 'Editar'} ${schema.singular.toLowerCase()}`,
+    desc: esNuevo ? 'Diligencie los campos marcados con asterisco (*).'
+                  : 'Modifique la información y guarde los cambios.',
+    ancho: entidad === 'equipos' ? 'max-w-3xl' : 'max-w-2xl',
+    icono: `<span class="w-9 h-9 grid place-items-center rounded-full bg-brand-50 text-brand-600">
+              ${svgIcon(schema.icono, 'w-5 h-5')}</span>`,
+    cuerpo, pie:[btnCancel, btnSave]
+  });
+
+  // Selects dependientes (Área depende de Sede)
+  $$('#formEnt select[data-padre]').forEach(sel => {
+    const padre = $(`#formEnt [name="${sel.dataset.padre}"]`);
+    if (!padre) return;
+    padre.addEventListener('change', () => {
+      const campo = schema.campos.find(c => c.k === sel.name);
+      const ops = opcionesRef(campo, datos, { [campo.campoPadre]: padre.value });
+      sel.innerHTML = `<option value="">${ops.length ? 'Seleccione…' : 'No hay áreas para esta sede'}</option>` +
+        ops.map(o => `<option value="${o.id}">${esc(etiquetaRef(campo.ref, o))}</option>`).join('');
+    });
+  });
+
+  setTimeout(() => { const f = $('#formEnt input, #formEnt select'); if (f) f.focus(); }, 60);
+}
+
+/** Valida y guarda el formulario abierto. */
+function guardarFormulario(entidad, schema, registro) {
+  const form = $('#formEnt');
+  const err = $('#formError');
+  const equipoAnterior = registro ? registro.equipoId : null;
+  const datos = {};
+  let faltante = null;
+
+  schema.campos.filter(c => !c.g).forEach(c => {
+    const el = form.elements[c.k];
+    const v = el ? String(el.value).trim() : '';
+    datos[c.k] = v;
+    if (c.req && !v && !faltante) faltante = c;
+  });
+
+  if (faltante) {
+    err.textContent = `El campo “${faltante.l}” es obligatorio.`;
+    err.classList.remove('hidden');
+    const el = form.elements[faltante.k]; if (el) el.focus();
+    return;
+  }
+
+  // Validación de unicidad: cada esquema declara qué campos no pueden repetirse.
+  const unicos = schema.unicos || (schema.sinNombre ? [] : ['nombre']);
+  for (const k of unicos) {
+    const dup = DB[entidad].find(r => norm(r[k]) === norm(datos[k]) &&
+                                      (!registro || r.id !== registro.id));
+    if (dup) {
+      const campo = schema.campos.find(c => c.k === k);
+      err.textContent = `Ya existe un registro con ${campo ? campo.l.toLowerCase() : k} “${datos[k]}”.`;
+      err.classList.remove('hidden');
+      const el = form.elements[k]; if (el) el.focus();
+      return;
+    }
+  }
+
+  if (registro) {
+    Object.assign(registro, datos);
+    toast(`${schema.singular} actualizado correctamente.`, 'ok');
+  } else {
+    DB[entidad].push(Object.assign({ id: uid(), creado: new Date().toISOString() }, datos));
+    toast(`${schema.singular} registrado correctamente.`, 'ok');
+  }
+  // Mantiene coherente la fecha de último mantenimiento del equipo afectado.
+  if (entidad === 'mantenimientos') {
+    sincronizarUltMant(datos.equipoId);
+    if (equipoAnterior && equipoAnterior !== datos.equipoId) sincronizarUltMant(equipoAnterior);
+  }
+
+  guardarDB();
+  cerrarModal();
+  irA(vistaActual);
+}
+
+/* Qué otras colecciones apuntan a cada entidad. Si hay registros que dependen
+   del que se quiere borrar, la eliminación se bloquea para no dejar datos huérfanos. */
+const DEPENDENCIAS = {
+  proveedores: [['equipos', 'proveedorId']],
+  sedes:       [['equipos', 'sedeId'], ['areas', 'sedeId']],
+  areas:       [['equipos', 'areaId']],
+  usuarios:    [['equipos', 'responsableId']],
+  contratistas:[['mantenimientos', 'contratistaId']],
+  tiposEquipo: [['equipos', 'tipoId']],
+  marcas:      [['equipos', 'marcaId']]
+};
+
+/** Texto con el que se identifica un registro en los mensajes al usuario. */
+const describir = (schema, r) =>
+  schema.descriptor ? schema.descriptor(r) : (r.nombre || r.idEquipo || 'este registro');
+
+/** Elimina un registro previa confirmación y validando dependencias. */
+function eliminarRegistro(entidad, schema, registro) {
+  const enUso = (DEPENDENCIAS[entidad] || [])
+    .map(([col, campo]) => ({ col, n: listar(col).filter(r => r[campo] === registro.id).length }))
+    .filter(x => x.n > 0);
+
+  if (enUso.length) {
+    // Concuerda el número con el singular o el plural de cada entidad.
+    const detalle = enUso.map(x => {
+      const e = esquemaDe(x.col);
+      const nom = !e ? x.col : (x.n === 1 ? e.singular.toLowerCase() : e.titulo.toLowerCase());
+      return `<b>${x.n}</b> ${nom}`;
+    }).join(' y ');
+    abrirModal({
+      titulo:'No es posible eliminar', ancho:'max-w-md',
+      icono:`<span class="w-9 h-9 grid place-items-center rounded-full bg-amber-100 text-amber-600">
+               <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                 <circle cx="12" cy="12" r="9"/><path d="M12 8v4m0 4h.01" stroke-linecap="round"/></svg></span>`,
+      cuerpo:`<p class="text-sm text-slate-600 leading-relaxed">
+                <b>${esc(describir(schema, registro))}</b> está siendo utilizado por ${detalle}.<br><br>
+                Para conservar la integridad de la información, cámbielo a estado
+                <b>Inactivo</b> en lugar de eliminarlo.</p>`,
+      pie:[(() => { const b = document.createElement('button');
+                    b.className = 'btn btn-primary'; b.textContent = 'Entendido';
+                    b.onclick = cerrarModal; return b; })()]
+    });
+    return;
+  }
+
+  // Al eliminar un equipo se eliminan también los mantenimientos que lo registran.
+  const mantAsociados = entidad === 'equipos' ? mantenimientosDe(registro.id).length : 0;
+
+  confirmar({
+    titulo:`Eliminar ${schema.singular.toLowerCase()}`,
+    mensaje:`¿Está seguro de eliminar <b>${esc(describir(schema, registro))}</b>?` +
+            (mantAsociados ? `<br><br>Se eliminará también su historial de
+               <b>${mantAsociados}</b> mantenimiento(s).` : '') +
+            `<br><br>Esta acción no se puede deshacer.`,
+    onOk: () => {
+      DB[entidad] = DB[entidad].filter(r => r.id !== registro.id);
+      if (entidad === 'equipos')
+        DB.mantenimientos = DB.mantenimientos.filter(m => m.equipoId !== registro.id);
+      if (entidad === 'mantenimientos') sincronizarUltMant(registro.equipoId);
+      guardarDB(); irA(vistaActual);
+      toast(`${schema.singular} eliminado.`, 'info');
+    }
+  });
+}
+
+/* ===============================================================
+   G.2  VISTA GENÉRICA DE LAS 6 ENTIDADES DEL PANEL DE ADMINISTRACIÓN
+   =============================================================== */
+function valorCelda(col, r) {
+  const v = r[col.k];
+  if (col.tipo === 'ref')   return esc(nombreDe(col.ref, v));
+  if (col.tipo === 'fecha') return esc(fFecha(v));
+  if (col.tipo === 'codigo') return `<span class="font-mono font-bold text-brand-700">${esc(v || '—')}</span>`;
+  if (col.tipo === 'hora')  return `<span class="font-mono text-slate-600">${esc(v || '—')}</span>`;
+  if (col.tipo === 'texto') return v
+    ? `<span class="block max-w-[26rem] truncate" title="${esc(v)}">${esc(v)}</span>`
+    : '<span class="text-slate-300">—</span>';
+  if (col.tipo === 'chipTipoMant')
+    return `<span class="chip ${v === 'Correctivo' ? 'chip-warn' : 'chip-ok'}">${esc(v || '—')}</span>`;
+  if (col.tipo === 'url')  return v ? `<a href="${esc(v)}" target="_blank" rel="noopener"
+                                        class="text-brand-600 hover:underline">${esc(v.replace(/^https?:\/\//, ''))}</a>` : '—';
+  if (col.tipo === 'chipEstado') return `<span class="chip ${v === 'Activo' ? 'chip-ok' : 'chip-off'}">${esc(v || '—')}</span>`;
+  if (col.tipo === 'chipInfo')   return `<span class="chip chip-info">${esc(v || '—')}</span>`;
+  return v ? esc(v) : '<span class="text-slate-300">—</span>';
+}
+
+function renderEntidad(entidad) {
+  const s = SCHEMAS[entidad];
+  const q = filtros[entidad] || '';
+  const todos = s.orden ? listar(entidad).slice().sort(s.orden) : listar(entidad);
+  const datos = todos.filter(r => !q || norm(JSON.stringify(Object.values(r))).includes(norm(q)));
+  // Para mantenimientos no aplica "activos": se muestran los preventivos del total.
+  const activos = s.sinNombre ? todos.filter(r => r.tipo === 'Preventivo').length
+                              : todos.filter(r => r.estado === 'Activo').length;
+
+  $('#main').innerHTML = `
+  <div class="anim-fade space-y-4">
+
+    <!-- Encabezado del módulo -->
+    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-4">
+      <span class="w-11 h-11 grid place-items-center rounded-xl bg-brand-600 text-white shrink-0">
+        ${svgIcon(s.icono, 'w-6 h-6')}</span>
+      <div class="min-w-0 flex-1">
+        <h2 class="font-extrabold text-slate-800">${esc(s.titulo)}</h2>
+        <p class="text-xs text-slate-500">${esc(s.subtitulo)}</p>
+      </div>
+      <div class="flex items-center gap-5 text-center">
+        <div><p class="text-xl font-extrabold text-brand-600">${todos.length}</p>
+             <p class="text-[10px] uppercase tracking-wide text-slate-400">Total</p></div>
+        <div><p class="text-xl font-extrabold text-emerald-600">${activos}</p>
+             <p class="text-[10px] uppercase tracking-wide text-slate-400">${s.sinNombre ? 'Preventivos' : 'Activos'}</p></div>
+      </div>
+    </div>
+
+    <!-- Barra de herramientas -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="p-3 sm:p-4 flex flex-wrap gap-2 items-center border-b border-slate-100">
+        <div class="relative flex-1 min-w-[200px]">
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+               fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+          <input id="buscador" class="inp pl-9" placeholder="Buscar en ${esc(s.titulo.toLowerCase())}…" value="${esc(q)}">
+        </div>
+        <button id="btnExport" class="btn btn-ghost">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                  stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="hidden sm:inline">Exportar</span>
+        </button>
+        <button id="btnNuevo" class="btn btn-primary">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+          Nuevo ${esc(s.singular.toLowerCase())}
+        </button>
+      </div>
+
+      <!-- Tabla de registros -->
+      <div class="tabla-wrap overflow-x-auto">
+        <table class="tbl">
+          <thead><tr>
+            ${s.columnas.map(c => `<th>${esc(c.t)}</th>`).join('')}
+            <th class="text-right">Acciones</th>
+          </tr></thead>
+          <tbody>
+            ${datos.length === 0 ? `
+              <tr><td colspan="${s.columnas.length + 1}" class="py-10 text-center text-slate-400">
+                <svg class="w-10 h-10 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor"
+                     stroke-width="1.5" viewBox="0 0 24 24">
+                  <path d="M4 7h16v13H4zM4 7l2-3h12l2 3" stroke-linejoin="round"/></svg>
+                ${q ? 'No se encontraron registros con ese criterio de búsqueda.'
+                    : 'Aún no hay registros. Use el botón «Nuevo» para agregar el primero.'}
+              </td></tr>` :
+              datos.map(r => `
+              <tr>
+                ${s.columnas.map(c => `<td class="${c.bold ? 'font-semibold text-slate-800' : 'text-slate-600'}">${valorCelda(c, r)}</td>`).join('')}
+                <td class="text-right whitespace-nowrap">
+                  <button class="p-1.5 rounded-md text-brand-600 hover:bg-brand-50" data-edit="${r.id}" title="Editar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="p-1.5 rounded-md text-accent-500 hover:bg-accent-100" data-del="${r.id}" title="Eliminar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M5 7h14M10 7V5h4v2M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="px-4 py-2.5 text-xs text-slate-500 border-t border-slate-100 bg-slate-50">
+        Mostrando <b>${datos.length}</b> de <b>${todos.length}</b> registro(s).
+      </div>
+    </div>
+  </div>`;
+
+  // Eventos de la vista
+  const buscador = $('#buscador');
+  buscador.addEventListener('input', () => {
+    filtros[entidad] = buscador.value;
+    const pos = buscador.selectionStart;
+    renderEntidad(entidad);
+    const nb = $('#buscador'); nb.focus(); nb.setSelectionRange(pos, pos);
+  });
+  $('#btnNuevo').onclick = () => abrirFormulario(entidad, s, null);
+  $('#btnExport').onclick = () => exportarCSV(entidad, s.columnas, datos, s.titulo);
+  $$('[data-edit]').forEach(b => b.onclick = () => abrirFormulario(entidad, s, buscarId(entidad, b.dataset.edit)));
+  $$('[data-del]').forEach(b => b.onclick = () => eliminarRegistro(entidad, s, buscarId(entidad, b.dataset.del)));
+}
+</script>
+
+<script>
+/* ===============================================================
+   G.3  MÓDULO PRINCIPAL: REGISTRO DE EQUIPOS DE CÓMPUTO
+   =============================================================== */
+
+/** Genera el siguiente consecutivo EQ-0001, EQ-0002, … */
+const siguienteIdEquipo = () => siguienteCodigo('equipos', 'idEquipo', 'EQ-', 4);
+
+/** Copia al equipo la fecha del mantenimiento más reciente de su historial.
+    Si el equipo aún no tiene historial, se respeta la fecha escrita a mano
+    (puede corresponder a un mantenimiento anterior a la puesta en marcha). */
+function sincronizarUltMant(equipoId) {
+  const eq = buscarId('equipos', equipoId);
+  if (!eq) return;
+  const h = mantenimientosDe(equipoId);
+  if (h.length) eq.fechaUltMant = h[0].fecha;
+}
+
+/** Semáforo del último mantenimiento: más de 180 días sin intervención avisa. */
+function estadoUltMant(iso) {
+  if (!iso) return { clase:'chip-off', texto:'Sin registro' };
+  const d = -diasPara(iso);                       // días transcurridos
+  if (d > 365) return { clase:'chip-bad',  texto:fFecha(iso), nota:`hace ${Math.round(d / 30)} meses` };
+  if (d > 180) return { clase:'chip-warn', texto:fFecha(iso), nota:`hace ${Math.round(d / 30)} meses` };
+  return { clase:'chip-ok', texto:fFecha(iso), nota:`hace ${d} día(s)` };
+}
+
+/** Estado del licenciamiento Office según la fecha de vigencia. */
+function estadoOffice(iso) {
+  const d = diasPara(iso);
+  if (d === null)  return { clase:'chip-off',  texto:'Sin fecha',            dias:null };
+  if (d < 0)       return { clase:'chip-bad',  texto:`Vencida (${fFecha(iso)})`, dias:d };
+  if (d <= 60)     return { clase:'chip-warn', texto:`${d} día(s)`,          dias:d };
+  return             { clase:'chip-ok',   texto:fFecha(iso),             dias:d };
+}
+
+const chipEstadoEquipo = (e) => {
+  const m = { 'Activo':'chip-ok', 'En mantenimiento':'chip-warn',
+              'En bodega':'chip-info', 'Dado de baja':'chip-bad' };
+  return `<span class="chip ${m[e] || 'chip-off'}">${esc(e || '—')}</span>`;
+};
+
+/* Filtros propios del módulo de equipos */
+const fEq = { q:'', sede:'', area:'', tipo:'', estado:'' };
+
+function equiposFiltrados() {
+  return DB.equipos.filter(e => {
+    if (fEq.sede   && e.sedeId  !== fEq.sede)   return false;
+    if (fEq.area   && e.areaId  !== fEq.area)   return false;
+    if (fEq.tipo   && e.tipoId  !== fEq.tipo)   return false;
+    if (fEq.estado && e.estado  !== fEq.estado) return false;
+    if (!fEq.q) return true;
+    const texto = [e.idEquipo, e.modelo, e.serialFabrica, e.serialExterno, e.detalleHardware,
+                   e.sistemaOperativo, e.versionOffice, e.cuentaOffice, e.observaciones,
+                   nombreDe('marcas', e.marcaId), nombreDe('tiposEquipo', e.tipoId),
+                   nombreDe('sedes', e.sedeId), nombreDe('areas', e.areaId),
+                   nombreDe('usuarios', e.responsableId), nombreDe('proveedores', e.proveedorId)].join(' ');
+    return norm(texto).includes(norm(fEq.q));
+  });
+}
+
+function renderEquipos() {
+  const datos = equiposFiltrados();
+  const opc = (ent, val) => listar(ent).map(r =>
+    `<option value="${r.id}" ${val === r.id ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('');
+
+  $('#main').innerHTML = `
+  <div class="anim-fade space-y-4">
+
+    <!-- Encabezado -->
+    <div class="rounded-xl bg-gradient-to-r from-brand-800 to-brand-700 text-white p-5 flex flex-wrap items-center gap-4">
+      <span class="w-12 h-12 grid place-items-center rounded-xl bg-white/15 shrink-0">
+        ${svgIcon('equipo', 'w-7 h-7')}</span>
+      <div class="min-w-0 flex-1">
+        <h2 class="font-extrabold text-lg leading-tight">Registro de Equipos de Cómputo</h2>
+        <p class="text-brand-100 text-xs">${esc(SCHEMA_EQUIPOS.subtitulo)}</p>
+      </div>
+      <button id="btnNuevoEq" class="btn bg-white text-brand-700 hover:bg-brand-50 font-bold">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+        Registrar equipo
+      </button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        <div class="lg:col-span-2 relative">
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+               fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+          <input id="eqQ" class="inp pl-9" placeholder="Buscar por ID, serial, modelo, responsable…" value="${esc(fEq.q)}">
+        </div>
+        <select id="eqSede" class="inp"><option value="">Todas las sedes</option>${opc('sedes', fEq.sede)}</select>
+        <select id="eqArea" class="inp"><option value="">Todas las áreas</option>${opc('areas', fEq.area)}</select>
+        <select id="eqTipo" class="inp"><option value="">Todos los tipos</option>${opc('tiposEquipo', fEq.tipo)}</select>
+      </div>
+      <div class="flex flex-wrap gap-2 items-center mt-2.5">
+        <select id="eqEstado" class="inp !w-auto">
+          <option value="">Todos los estados</option>
+          ${['Activo','En mantenimiento','En bodega','Dado de baja']
+            .map(o => `<option ${fEq.estado === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+        <button id="eqLimpiar" class="btn btn-ghost">Limpiar filtros</button>
+        <span class="text-xs text-slate-500 ml-auto">
+          <b>${datos.length}</b> de <b>${DB.equipos.length}</b> equipo(s)</span>
+        <button id="eqExport" class="btn btn-ghost">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                  stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Exportar CSV
+        </button>
+        <button id="eqPrint" class="btn btn-ghost">Imprimir</button>
+      </div>
+    </div>
+
+    <!-- Listado -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="tabla-wrap overflow-x-auto">
+        <table class="tbl">
+          <thead><tr>
+            <th>ID</th><th>Equipo</th><th>Tipo</th><th>Sede / Área</th>
+            <th>Responsable</th><th>Serial fábrica</th><th>Últ. mantenimiento</th>
+            <th>Vigencia Office</th><th>Estado</th><th class="text-right">Acciones</th>
+          </tr></thead>
+          <tbody>
+          ${datos.length === 0 ? `
+            <tr><td colspan="10" class="py-12 text-center text-slate-400">
+              <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor"
+                   stroke-width="1.5" viewBox="0 0 24 24">
+                <rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20h8" stroke-linecap="round"/></svg>
+              ${DB.equipos.length ? 'Ningún equipo coincide con los filtros aplicados.'
+                                  : 'Aún no hay equipos registrados. Use «Registrar equipo» para comenzar.'}
+            </td></tr>` :
+            datos.map(e => {
+              const off = estadoOffice(e.vigenciaOffice);
+              const um = estadoUltMant(e.fechaUltMant);
+              return `
+              <tr>
+                <td><span class="font-mono font-bold text-brand-700">${esc(e.idEquipo)}</span></td>
+                <td>
+                  <p class="font-semibold text-slate-800">${esc(nombreDe('marcas', e.marcaId))} ${esc(e.modelo)}</p>
+                  <p class="text-[11px] text-slate-400">${esc(e.sistemaOperativo || '')}</p>
+                </td>
+                <td class="text-slate-600">${esc(nombreDe('tiposEquipo', e.tipoId))}</td>
+                <td>
+                  <p class="text-slate-700">${esc(nombreDe('sedes', e.sedeId))}</p>
+                  <p class="text-[11px] text-slate-400">${esc(nombreDe('areas', e.areaId))}</p>
+                </td>
+                <td class="text-slate-600">${esc(nombreDe('usuarios', e.responsableId))}</td>
+                <td><span class="font-mono text-[12px] text-slate-600">${esc(e.serialFabrica)}</span></td>
+                <td><span class="chip ${um.clase}">${esc(um.texto)}</span>
+                    ${um.nota ? `<span class="block text-[11px] text-slate-400 mt-0.5">${esc(um.nota)}</span>` : ''}</td>
+                <td><span class="chip ${off.clase}">${esc(off.texto)}</span></td>
+                <td>${chipEstadoEquipo(e.estado)}</td>
+                <td class="text-right whitespace-nowrap">
+                  <button class="p-1.5 rounded-md text-slate-500 hover:bg-slate-100" data-ver="${e.id}" title="Ver ficha">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                  <button class="p-1.5 rounded-md text-brand-600 hover:bg-brand-50" data-edit="${e.id}" title="Editar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke-linejoin="round"/></svg>
+                  </button>
+                  <button class="p-1.5 rounded-md text-accent-500 hover:bg-accent-100" data-del="${e.id}" title="Eliminar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M5 7h14M10 7V5h4v2M6 7l1 13h10l1-13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                </td>
+              </tr>`; }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+
+  /* Eventos */
+  const q = $('#eqQ');
+  q.addEventListener('input', () => {
+    fEq.q = q.value; const p = q.selectionStart;
+    renderEquipos(); const n = $('#eqQ'); n.focus(); n.setSelectionRange(p, p);
+  });
+  $('#eqSede').onchange   = (ev) => { fEq.sede = ev.target.value; fEq.area = ''; renderEquipos(); };
+  $('#eqArea').onchange   = (ev) => { fEq.area = ev.target.value; renderEquipos(); };
+  $('#eqTipo').onchange   = (ev) => { fEq.tipo = ev.target.value; renderEquipos(); };
+  $('#eqEstado').onchange = (ev) => { fEq.estado = ev.target.value; renderEquipos(); };
+  $('#eqLimpiar').onclick = () => { fEq.q = fEq.sede = fEq.area = fEq.tipo = fEq.estado = ''; renderEquipos(); };
+  $('#eqPrint').onclick   = () => window.print();
+  $('#eqExport').onclick  = () => exportarEquiposCSV(datos);
+  $('#btnNuevoEq').onclick = () => abrirFormulario('equipos', SCHEMA_EQUIPOS, null);
+  $$('[data-edit]').forEach(b => b.onclick = () => abrirFormulario('equipos', SCHEMA_EQUIPOS, buscarId('equipos', b.dataset.edit)));
+  $$('[data-del]').forEach(b => b.onclick  = () => eliminarRegistro('equipos', SCHEMA_EQUIPOS, buscarId('equipos', b.dataset.del)));
+  $$('[data-ver]').forEach(b => b.onclick  = () => verFichaEquipo(buscarId('equipos', b.dataset.ver)));
+}
+
+/** Ficha detallada de un equipo (solo lectura). */
+function verFichaEquipo(e) {
+  const hist = mantenimientosDe(e.id);
+  const fila = (l, v) => `<div class="py-1.5 border-b border-slate-100">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">${esc(l)}</p>
+      <p class="text-sm text-slate-800">${v || '<span class="text-slate-300">—</span>'}</p></div>`;
+  const off = estadoOffice(e.vigenciaOffice);
+
+  const cuerpo = `
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
+      ${fila('ID del equipo', `<span class="font-mono font-bold text-brand-700">${esc(e.idEquipo)}</span>`)}
+      ${fila('Estado', chipEstadoEquipo(e.estado))}
+      ${fila('Fecha de compra', esc(fFecha(e.fechaCompra)))}
+      ${fila('Último mantenimiento', `<span class="chip ${estadoUltMant(e.fechaUltMant).clase}">${esc(estadoUltMant(e.fechaUltMant).texto)}</span>`)}
+      ${fila('Proveedor', esc(nombreDe('proveedores', e.proveedorId)))}
+      ${fila('Sede', esc(nombreDe('sedes', e.sedeId)))}
+      ${fila('Área', esc(nombreDe('areas', e.areaId)))}
+      ${fila('Responsable', esc(nombreDe('usuarios', e.responsableId)))}
+      ${fila('Tipo de equipo', esc(nombreDe('tiposEquipo', e.tipoId)))}
+      ${fila('Marca', esc(nombreDe('marcas', e.marcaId)))}
+      ${fila('Modelo', esc(e.modelo))}
+      ${fila('Serial de fábrica', `<span class="font-mono">${esc(e.serialFabrica)}</span>`)}
+      ${fila('Serial externo / placa', `<span class="font-mono">${esc(e.serialExterno)}</span>`)}
+      ${fila('Sistema operativo', esc(e.sistemaOperativo))}
+      ${fila('Versión de Office', esc(e.versionOffice))}
+      ${fila('Cuenta de Office', esc(e.cuentaOffice))}
+      ${fila('Vigencia Office', `<span class="chip ${off.clase}">${esc(off.texto)}</span>`)}
+    </div>
+    <div class="mt-2">
+      ${fila('Detalle de hardware', esc(e.detalleHardware))}
+      ${fila('Observaciones', esc(e.observaciones))}
+    </div>
+
+    <!-- Historial de mantenimientos del equipo -->
+    <div class="mt-5">
+      <div class="flex items-center gap-2 mb-2">
+        <h4 class="text-[11px] font-extrabold uppercase tracking-wider text-brand-600">
+          Historial de mantenimientos</h4>
+        <span class="chip chip-info">${hist.length}</span>
+        <button id="btnMantEquipo" class="btn btn-ghost !py-1 !px-2.5 text-xs ml-auto">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+          Registrar mantenimiento
+        </button>
+      </div>
+      ${hist.length === 0 ? `
+        <p class="text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg py-4 text-center">
+          Este equipo aún no tiene mantenimientos registrados.</p>` : `
+        <ol class="space-y-2">${hist.map(m => `
+          <li class="border border-slate-200 rounded-lg p-3">
+            <div class="flex flex-wrap items-center gap-2 mb-1">
+              <span class="chip ${m.tipo === 'Correctivo' ? 'chip-warn' : 'chip-ok'}">${esc(m.tipo)}</span>
+              <span class="text-xs font-semibold text-slate-700">${esc(fFecha(m.fecha))}</span>
+              <span class="text-xs text-slate-400 font-mono">${esc(m.hora || '')}</span>
+              <span class="text-xs text-slate-500 ml-auto">${esc(nombreDe('contratistas', m.contratistaId))}</span>
+            </div>
+            <p class="text-sm text-slate-600 leading-snug">${esc(m.detalles)}</p>
+          </li>`).join('')}</ol>`}
+    </div>`;
+
+  const bCerrar = document.createElement('button');
+  bCerrar.className = 'btn btn-ghost'; bCerrar.textContent = 'Cerrar'; bCerrar.onclick = cerrarModal;
+  const bEditar = document.createElement('button');
+  bEditar.className = 'btn btn-primary'; bEditar.textContent = 'Editar equipo';
+  bEditar.onclick = () => { cerrarModal(); abrirFormulario('equipos', SCHEMA_EQUIPOS, e); };
+
+  abrirModal({
+    titulo:`Ficha técnica · ${e.idEquipo}`,
+    desc:`${nombreDe('marcas', e.marcaId)} ${e.modelo}`,
+    ancho:'max-w-3xl',
+    icono:`<span class="w-9 h-9 grid place-items-center rounded-full bg-brand-50 text-brand-600">
+             ${svgIcon('equipo', 'w-5 h-5')}</span>`,
+    cuerpo, pie:[bCerrar, bEditar]
+  });
+
+  // Atajo: registrar un mantenimiento con el equipo ya seleccionado
+  $('#btnMantEquipo').onclick = () => {
+    cerrarModal();
+    abrirFormulario('mantenimientos', SCHEMAS.mantenimientos, null, { equipoId: e.id });
+  };
+}
+
+/* ===============================================================
+   G.4  PANEL GENERAL (DASHBOARD)
+   =============================================================== */
+function renderPanel() {
+  const eq = DB.equipos;
+  const activos = eq.filter(e => e.estado === 'Activo').length;
+  const manten  = eq.filter(e => e.estado === 'En mantenimiento').length;
+  const baja    = eq.filter(e => e.estado === 'Dado de baja').length;
+
+  // Licencias de Office próximas a vencer o vencidas (60 días)
+  const licencias = eq.map(e => ({ e, d: diasPara(e.vigenciaOffice) }))
+                      .filter(x => x.d !== null && x.d <= 60)
+                      .sort((a, b) => a.d - b.d);
+
+  const agrupar = (campoId, entidad) => {
+    const m = {};
+    eq.forEach(e => { const n = nombreDe(entidad, e[campoId]); m[n] = (m[n] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  };
+  // --- Mantenimientos ---
+  const mant = listar('mantenimientos').slice()
+    .sort((a, b) => `${b.fecha} ${b.hora}`.localeCompare(`${a.fecha} ${a.hora}`));
+  const mesActual = new Date().toISOString().slice(0, 7);      // aaaa-mm
+  const mantMes = mant.filter(m => String(m.fecha).startsWith(mesActual)).length;
+  const prev = mant.filter(m => m.tipo === 'Preventivo').length;
+  const corr = mant.filter(m => m.tipo === 'Correctivo').length;
+
+  const porTipo = agrupar('tipoId', 'tiposEquipo');
+  const porSede = agrupar('sedeId', 'sedes');
+  const maxT = Math.max(1, ...porTipo.map(x => x[1]));
+  const maxS = Math.max(1, ...porSede.map(x => x[1]));
+
+  const kpi = (titulo, valor, sub, color, icono) => `
+    <div class="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+      <span class="w-11 h-11 grid place-items-center rounded-xl ${color} shrink-0">${icono}</span>
+      <div class="min-w-0">
+        <p class="text-2xl font-extrabold text-slate-800 leading-none">${valor}</p>
+        <p class="text-xs font-semibold text-slate-600 mt-1">${titulo}</p>
+        <p class="text-[11px] text-slate-400">${sub}</p>
+      </div>
+    </div>`;
+
+  const barras = (lista, max, color) => lista.length === 0
+    ? '<p class="text-sm text-slate-400 py-4 text-center">Sin datos para mostrar.</p>'
+    : lista.map(([n, v, colorPropio]) => `
+      <div class="mb-2.5">
+        <div class="flex justify-between text-xs mb-1">
+          <span class="text-slate-600 font-medium truncate pr-2">${esc(n)}</span>
+          <span class="font-bold text-slate-700">${v}</span>
+        </div>
+        <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div class="h-full rounded-full ${colorPropio || color}" style="width:${Math.round(v / max * 100)}%"></div>
+        </div>
+      </div>`).join('');
+
+  $('#main').innerHTML = `
+  <div class="anim-fade space-y-4">
+
+    <!-- Bienvenida -->
+    <div class="rounded-xl bg-gradient-to-r from-brand-900 via-brand-800 to-brand-700 text-white p-5 sm:p-6
+                flex flex-wrap items-center gap-4 relative overflow-hidden">
+      <div class="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-accent-500/25"></div>
+      <div class="relative z-10 min-w-0 flex-1">
+        <p class="text-brand-100 text-xs uppercase tracking-widest font-bold">Centro de Neurodesarrollo La Esperanza</p>
+        <h2 class="text-xl sm:text-2xl font-extrabold mt-1">Control de Equipos de Cómputo</h2>
+        <p class="text-brand-100 text-sm mt-1">Inventario tecnológico institucional actualizado al ${fFecha(new Date().toISOString().slice(0, 10))}.</p>
+      </div>
+      <button id="pnlNuevo" class="relative z-10 btn bg-white text-brand-700 hover:bg-brand-50 font-bold">
+        Registrar equipo
+      </button>
+    </div>
+
+    <!-- Indicadores -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      ${kpi('Equipos registrados', eq.length, 'Total en inventario', 'bg-brand-600 text-white',
+            svgIcon('equipo', 'w-6 h-6'))}
+      ${kpi('Equipos activos', activos, 'En operación', 'bg-brand-400 text-white',
+            '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>')}
+      ${kpi('En mantenimiento', manten, 'Requieren atención', 'bg-amber-500 text-white',
+            '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 1-5.3 5.3L4 17v3h3l5.4-5.4a4 4 0 0 1 5.3-5.3l-2.6 2.6 1.6 1.6 2.6-2.6a4 4 0 0 1-4.6-4.6Z" stroke-linejoin="round"/></svg>')}
+      ${kpi('Licencias por vencer', licencias.length, 'Office en 60 días o menos', 'bg-accent-500 text-white',
+            '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>')}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Alertas de licenciamiento -->
+      <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-accent-500"></span>
+          <h3 class="font-extrabold text-sm text-slate-800">Alertas de licenciamiento Office</h3>
+          <span class="ml-auto text-[11px] text-slate-400">Vigencias vencidas o próximas (60 días)</span>
+        </div>
+        ${licencias.length === 0 ? `
+          <p class="py-8 text-center text-sm text-slate-400">
+            Ninguna licencia próxima a vencer. Todo en orden.</p>` : `
+          <div class="tabla-wrap overflow-x-auto"><table class="tbl">
+            <thead><tr><th>Equipo</th><th>Responsable</th><th>Cuenta Office</th><th>Vigencia</th></tr></thead>
+            <tbody>${licencias.slice(0, 8).map(({ e, d }) => `
+              <tr>
+                <td><span class="font-mono font-bold text-brand-700">${esc(e.idEquipo)}</span>
+                    <span class="text-slate-500 text-xs block">${esc(nombreDe('marcas', e.marcaId))} ${esc(e.modelo)}</span></td>
+                <td class="text-slate-600">${esc(nombreDe('usuarios', e.responsableId))}</td>
+                <td class="text-slate-600 text-xs">${esc(e.cuentaOffice || '—')}</td>
+                <td><span class="chip ${d < 0 ? 'chip-bad' : 'chip-warn'}">
+                    ${d < 0 ? `Vencida hace ${Math.abs(d)} día(s)` : `Vence en ${d} día(s)`}</span>
+                    <span class="block text-[11px] text-slate-400 mt-0.5">${fFecha(e.vigenciaOffice)}</span></td>
+              </tr>`).join('')}</tbody>
+          </table></div>`}
+      </div>
+
+      <!-- Resumen del panel de administración -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 class="font-extrabold text-sm text-slate-800 mb-3">Datos maestros</h3>
+        <div class="space-y-1.5">
+          ${['usuarios','proveedores','sedes','areas','tiposEquipo','marcas'].map(k => `
+            <button data-goto="${k}"
+                    class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-brand-50 text-left transition">
+              <span class="w-7 h-7 grid place-items-center rounded-lg bg-brand-50 text-brand-600 shrink-0">
+                ${svgIcon(SCHEMAS[k].icono, 'w-4 h-4')}</span>
+              <span class="text-sm text-slate-700 flex-1 truncate">${esc(SCHEMAS[k].titulo)}</span>
+              <span class="text-sm font-extrabold text-brand-700">${DB[k].length}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <!-- Mantenimientos recientes -->
+      <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-brand-600"></span>
+          <h3 class="font-extrabold text-sm text-slate-800">Mantenimientos recientes</h3>
+          <span class="chip chip-info">${mantMes} este mes</span>
+          <button id="pnlVerMant" class="ml-auto text-xs font-semibold text-brand-600 hover:underline">
+            Ver todos (${mant.length})</button>
+        </div>
+        ${mant.length === 0 ? `
+          <p class="py-8 text-center text-sm text-slate-400">
+            Aún no se han registrado mantenimientos.</p>` : `
+          <div class="tabla-wrap overflow-x-auto"><table class="tbl">
+            <thead><tr><th>Fecha</th><th>Equipo</th><th>Tipo</th><th>Contratista</th><th>Detalle</th></tr></thead>
+            <tbody>${mant.slice(0, 6).map(m => `
+              <tr>
+                <td class="whitespace-nowrap"><span class="font-semibold text-slate-700">${fFecha(m.fecha)}</span>
+                    <span class="block text-[11px] text-slate-400 font-mono">${esc(m.hora || '')}</span></td>
+                <td class="text-slate-600 text-xs">${esc(nombreDe('equipos', m.equipoId))}</td>
+                <td><span class="chip ${m.tipo === 'Correctivo' ? 'chip-warn' : 'chip-ok'}">${esc(m.tipo)}</span></td>
+                <td class="text-slate-600">${esc(nombreDe('contratistas', m.contratistaId))}</td>
+                <td class="text-slate-500 text-xs">
+                  <span class="block max-w-[18rem] truncate" title="${esc(m.detalles)}">${esc(m.detalles)}</span></td>
+              </tr>`).join('')}</tbody>
+          </table></div>`}
+      </div>
+
+      <!-- Estado del inventario -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 class="font-extrabold text-sm text-slate-800 mb-3">Estado del inventario</h3>
+        ${barras([['Activos', activos, 'bg-brand-500'],
+                  ['En mantenimiento', manten, 'bg-amber-500'],
+                  ['Dados de baja', baja, 'bg-accent-500']]
+                 .filter(x => x[1] > 0), Math.max(1, eq.length), 'bg-brand-500')}
+        <p class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100">
+          Los datos se almacenan localmente en este navegador (localStorage).
+          Use el botón <b>Respaldo</b> para descargar una copia en formato JSON.</p>
+      </div>
+
+      <!-- Distribuciones -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 class="font-extrabold text-sm text-slate-800 mb-3">Equipos por tipo</h3>
+        ${barras(porTipo, maxT, 'bg-brand-600')}
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 class="font-extrabold text-sm text-slate-800 mb-3">Equipos por sede</h3>
+        ${barras(porSede, maxS, 'bg-brand-400')}
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 class="font-extrabold text-sm text-slate-800 mb-3">Mantenimientos por tipo</h3>
+        ${barras([['Preventivos', prev, 'bg-brand-500'], ['Correctivos', corr, 'bg-accent-500']]
+                 .filter(x => x[1] > 0), Math.max(1, mant.length), 'bg-brand-500')}
+        <p class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100">
+          Una proporción alta de correctivos indica que conviene reforzar el
+          plan de mantenimiento preventivo.</p>
+      </div>
+    </div>
+  </div>`;
+
+  $('#pnlNuevo').onclick = () => abrirFormulario('equipos', SCHEMA_EQUIPOS, null);
+  $('#pnlVerMant').onclick = () => irA('mantenimientos');
+  $$('[data-goto]').forEach(b => b.onclick = () => irA(b.dataset.goto));
+}
+
+/* ===============================================================
+   H. EXPORTACIÓN DE DATOS
+   =============================================================== */
+function descargarArchivo(nombre, contenido, tipo) {
+  const blob = new Blob(['﻿' + contenido], { type: tipo });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+const celdaCSV = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+function exportarCSV(entidad, columnas, datos, titulo) {
+  const enc = columnas.map(c => c.t);
+  const filas = datos.map(r => columnas.map(c =>
+    c.tipo === 'ref' ? nombreDe(c.ref, r[c.k]) : r[c.k]));
+  const csv = [enc, ...filas].map(f => f.map(celdaCSV).join(';')).join('\r\n');
+  descargarArchivo(`${entidad}_${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
+  toast(`${titulo}: ${datos.length} registro(s) exportado(s).`, 'info');
+}
+
+function exportarEquiposCSV(datos) {
+  const enc = ['ID equipo','Fecha compra','Proveedor','Sede','Área','Responsable','Serial fábrica',
+               'Serial externo','Tipo de equipo','Modelo','Marca','Detalle hardware','Sistema operativo',
+               'Versión Office','Cuenta Office','Vigencia Office','Estado','Observaciones',
+               'Mantenimientos','Fecha último mantenimiento'];
+  const filas = datos.map(e => [
+    e.idEquipo, fFecha(e.fechaCompra), nombreDe('proveedores', e.proveedorId),
+    nombreDe('sedes', e.sedeId), nombreDe('areas', e.areaId), nombreDe('usuarios', e.responsableId),
+    e.serialFabrica, e.serialExterno, nombreDe('tiposEquipo', e.tipoId), e.modelo,
+    nombreDe('marcas', e.marcaId), e.detalleHardware, e.sistemaOperativo, e.versionOffice,
+    e.cuentaOffice, fFecha(e.vigenciaOffice), e.estado, e.observaciones,
+    mantenimientosDe(e.id).length, e.fechaUltMant ? fFecha(e.fechaUltMant) : ''
+  ]);
+  const csv = [enc, ...filas].map(f => f.map(celdaCSV).join(';')).join('\r\n');
+  descargarArchivo(`inventario_equipos_${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
+  toast(`${datos.length} equipo(s) exportado(s) a CSV.`, 'info');
+}
+
+function descargarRespaldo() {
+  descargarArchivo(`respaldo_inventario_${new Date().toISOString().slice(0, 10)}.json`,
+                   JSON.stringify(DB, null, 2), 'application/json');
+  toast('Copia de seguridad descargada.', 'ok');
+}
+
+/* ===============================================================
+   I. ARRANQUE DE LA APLICACIÓN
+   =============================================================== */
+function init() {
+  cargarDB();
+
+  // Logos y año en curso
+  $('#logoBoxLogin').innerHTML = logoHTML(44);
+  $('#logoBoxLoginMobile').innerHTML = logoHTML(40);
+  $('#logoBoxApp').innerHTML = logoHTML(36);
+  $$('.anio').forEach(e => e.textContent = new Date().getFullYear());
+  $('#todayLabel').textContent = new Date().toLocaleDateString('es-CO',
+    { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  initLogin();
+
+  // Barra superior y menú
+  $('#btnLogout').onclick = () => confirmar({
+    titulo:'Cerrar sesión', textoOk:'Cerrar sesión',
+    mensaje:'¿Desea salir del sistema? Los datos registrados permanecerán guardados en este navegador.',
+    onOk: cerrarSesion
+  });
+  $('#btnBackup').onclick   = descargarRespaldo;
+  $('#openSidebar').onclick = abrirSidebar;
+  $('#closeSidebar').onclick = cerrarSidebar;
+  $('#overlay').onclick     = cerrarSidebar;
+
+  // Modal
+  $('#modalClose').onclick    = cerrarModal;
+  $('#modalBackdrop').onclick = cerrarModal;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) cerrarModal();
+  });
+
+  // Si ya había una sesión abierta, entra directamente
+  if (haySesion()) entrarApp();
+  else $('#loginUser').focus();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+</script>
+
+</body>
+</html>
