@@ -12,6 +12,7 @@
 /** Campos de texto de cada tabla (además de "id" y "creado", que son comunes). */
 export const CAMPOS = {
   usuarios:     ["nombre", "documento", "cargo", "email", "telefono", "rol", "estado"],
+  responsables: ["cedula", "nombres", "contacto", "email", "estado"],
   proveedores:  ["nombre", "nit", "contacto", "telefono", "email", "direccion", "estado"],
   sedes:        ["nombre", "codigo", "ciudad", "direccion", "telefono", "responsable", "estado"],
   areas:        ["nombre", "codigo", "sedeId", "responsable", "estado"],
@@ -33,6 +34,7 @@ export const TABLAS = Object.keys(CAMPOS) as Tabla[];
 /** Campos que no se pueden repetir dentro de cada tabla (sin distinguir mayúsculas ni tildes). */
 export const UNICOS: Record<Tabla, string[]> = {
   usuarios:       ["nombre"],
+  responsables:   ["cedula"],
   proveedores:    ["nombre"],
   sedes:          ["nombre"],
   areas:          ["nombre"],
@@ -48,7 +50,7 @@ export const DEPENDENCIAS: Partial<Record<Tabla, [Tabla, string][]>> = {
   proveedores:  [["equipos", "proveedorId"]],
   sedes:        [["equipos", "sedeId"], ["areas", "sedeId"]],
   areas:        [["equipos", "areaId"]],
-  usuarios:     [["equipos", "responsableId"]],
+  responsables: [["equipos", "responsableId"]],
   contratistas: [["mantenimientos", "contratistaId"]],
   tiposEquipo:  [["equipos", "tipoId"]],
   marcas:       [["equipos", "marcaId"]],
@@ -57,6 +59,7 @@ export const DEPENDENCIAS: Partial<Record<Tabla, [Tabla, string][]>> = {
 /** Nombre legible de cada tabla para los mensajes de error. */
 export const NOMBRES: Record<Tabla, [string, string]> = {
   usuarios:       ["usuario", "usuarios"],
+  responsables:   ["responsable", "responsables"],
   proveedores:    ["proveedor", "proveedores"],
   sedes:          ["sede", "sedes"],
   areas:          ["área", "áreas"],

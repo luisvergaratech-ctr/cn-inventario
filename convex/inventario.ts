@@ -5,6 +5,8 @@
      inventario:guardar   (mutación)  -> crear o actualizar un registro
      inventario:eliminar  (mutación)  -> borrar un registro
      inventario:importar  (mutación)  -> reemplazar toda la base con un respaldo
+     inventario:migrarResponsables (mutación) -> pasa a Responsables los
+                          usuarios que estaban asignados a equipos
    Todas exigen un token de sesión válido (ver acceso.ts).
    ================================================================ */
 import { query, mutation, MutationCtx } from "./_generated/server";
@@ -14,7 +16,7 @@ import { sesionValida, exigirSesion } from "./acceso";
 
 /* Validador de nombre de tabla: solo se aceptan las 9 tablas del inventario. */
 const vTabla = v.union(
-  v.literal("usuarios"), v.literal("proveedores"), v.literal("sedes"), v.literal("areas"),
+  v.literal("usuarios"), v.literal("responsables"), v.literal("proveedores"), v.literal("sedes"), v.literal("areas"),
   v.literal("tiposEquipo"), v.literal("marcas"), v.literal("contratistas"),
   v.literal("equipos"), v.literal("mantenimientos"),
 );
@@ -73,6 +75,41 @@ async function sincronizarUltMant(ctx: MutationCtx, equipoId: string | undefined
     await bd(ctx).patch(eq._id, { fechaUltMant: ultima });
   }
 }
+
+/** Los equipos registrados antes de existir la tabla Responsables apuntaban a un
+    USUARIO. Por cada usuario asignado se crea un responsable con el MISMO id,
+    así el equipo queda enlazado sin modificarlo. Devuelve cuántos se crearon. */
+async function pasarUsuariosAResponsables(ctx: MutationCtx): Promise<number> {
+  const responsables = new Set((await todos(ctx, "responsables")).map((r) => r.id));
+  const usuarios = new Map((await todos(ctx, "usuarios")).map((u) => [u.id, u]));
+  let creados = 0;
+  for (const e of await todos(ctx, "equipos")) {
+    const id = e.responsableId;
+    if (!id || responsables.has(id) || !usuarios.has(id)) continue;
+    const u = usuarios.get(id)!;
+    const datos = limpiar("responsables", {
+      cedula: u.documento, nombres: u.nombre, contacto: u.telefono,
+      email: u.email, estado: u.estado || "Activo", creado: new Date().toISOString(),
+    });
+    await bd(ctx).insert("responsables", { ...datos, id });
+    responsables.add(id);
+    creados++;
+  }
+  return creados;
+}
+
+/* ---------------------------------------------------------------
+   MUTACIÓN: pasar a Responsables los usuarios asignados a equipos
+   La llama el navegador automáticamente (una sola vez) cuando detecta
+   equipos cuyo responsable todavía es un usuario. Es segura de repetir.
+   --------------------------------------------------------------- */
+export const migrarResponsables = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    await exigirSesion(ctx, token);
+    return { creados: await pasarUsuariosAResponsables(ctx) };
+  },
+});
 
 /* ---------------------------------------------------------------
    CONSULTA: todos los datos del inventario
@@ -206,7 +243,10 @@ export const importar = mutation({
       resumen[t] = n;
     }
 
-    // 3) Recalcular la fecha de último mantenimiento de cada equipo
+    // 3) Respaldos antiguos: los usuarios asignados a equipos pasan a Responsables
+    resumen.responsables += await pasarUsuariosAResponsables(ctx);
+
+    // 4) Recalcular la fecha de último mantenimiento de cada equipo
     for (const e of await todos(ctx, "equipos")) await sincronizarUltMant(ctx, e.id);
 
     return resumen;

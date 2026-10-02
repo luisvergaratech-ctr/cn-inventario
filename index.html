@@ -523,6 +523,7 @@ const ICONS = {
   tipo:     '<path d="M4 6h16v10H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 20h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   contratista: '<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 16.2a3.2 3.2 0 0 1 6 0M14.5 10h4M14.5 13.5h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   mant:     '<path d="M14.7 6.3a4 4 0 0 1-5.3 5.3L4 17v3h3l5.4-5.4a4 4 0 0 1 5.3-5.3l-2.6 2.6 1.6 1.6 2.6-2.6a4 4 0 0 1-4.6-4.6Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  responsable: '<rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 17a4 4 0 0 1 8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   marca:    '<path d="M12 3l2.6 5.6 6.1.8-4.5 4.2 1.2 6.1L12 16.8 6.6 19.7l1.2-6.1L3.3 9.4l6.1-.8L12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>'
 };
 const svgIcon = (name, cls = 'w-[18px] h-[18px]') =>
@@ -546,7 +547,7 @@ const DB_KEY_ANTERIOR = 'cnle_inventario_v1';   // estructura sin Contratistas
 
 /** Estructura vacía de la base de datos. */
 const dbVacia = () => ({
-  usuarios: [], proveedores: [], sedes: [], areas: [],
+  usuarios: [], responsables: [], proveedores: [], sedes: [], areas: [],
   tiposEquipo: [], marcas: [], contratistas: [], equipos: [], mantenimientos: []
 });
 
@@ -584,6 +585,30 @@ function migrarDesdeV1(v1) {
   return d;
 }
 
+/* Antes de existir el módulo Responsables, el responsable de cada equipo era un
+   USUARIO. Por cada usuario asignado se crea un responsable con el MISMO id, así
+   los equipos quedan enlazados sin modificarlos. Devuelve cuántos se crearon. */
+const necesitaMigrarResponsables = (d) => {
+  const resp = new Set((d.responsables || []).map(r => r.id));
+  const usu  = new Set((d.usuarios || []).map(u => u.id));
+  return (d.equipos || []).some(e => e.responsableId && !resp.has(e.responsableId) && usu.has(e.responsableId));
+};
+function migrarResponsablesLocal(d) {
+  d.responsables = d.responsables || [];
+  const resp = new Set(d.responsables.map(r => r.id));
+  let creados = 0;
+  (d.equipos || []).forEach(e => {
+    const id = e.responsableId;
+    if (!id || resp.has(id)) return;
+    const u = (d.usuarios || []).find(x => x.id === id);
+    if (!u) return;
+    d.responsables.push({ id, cedula: u.documento || '', nombres: u.nombre || '', contacto: u.telefono || '',
+                          email: u.email || '', estado: u.estado || 'Activo', creado: new Date().toISOString() });
+    resp.add(id); creados++;
+  });
+  return creados;
+}
+
 function cargarDB() {
   const data = leerClave(DB_KEY);
   if (data) {
@@ -597,6 +622,8 @@ function cargarDB() {
       DB = datosDeEjemplo();
     }
   }
+  const nuevos = migrarResponsablesLocal(DB);
+  if (nuevos) setTimeout(() => toast(`Se crearon ${nuevos} responsable(s) a partir de los usuarios asignados a equipos.`, 'info'), 700);
   // La fecha de último mantenimiento se recalcula siempre desde el historial.
   listar('equipos').forEach(e => sincronizarUltMant(e.id));
   guardarDB();
@@ -613,6 +640,7 @@ const MODO_NUBE = typeof CONVEX_URL === 'string' && CONVEX_URL.trim() !== '';
 const TOKEN_KEY = 'cnle_token';
 let clienteConvex = null;
 let cancelarSuscripcion = null;
+let migracionResponsablesPedida = false;
 
 const leerToken = () => {
   try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || ''; }
@@ -678,6 +706,16 @@ function alRecibirDatos(datos) {
   DB = Object.assign(dbVacia(), datos);
   if ($('#appScreen').classList.contains('hidden')) entrarApp();
   else refrescarVista();
+
+  // Una sola vez: equipos que aún tienen como responsable a un usuario
+  if (!migracionResponsablesPedida && necesitaMigrarResponsables(DB)) {
+    migracionResponsablesPedida = true;
+    obtenerCliente().mutation('inventario:migrarResponsables', { token: leerToken() })
+      .then(r => r && r.creados &&
+        toast(`Se crearon ${r.creados} responsable(s) a partir de los usuarios asignados a equipos.`, 'info'))
+      .catch(e => toast('No se pudieron migrar los responsables: ' + mensajeError(e) +
+        ' Verifique que publicó las funciones con "npx convex deploy".', 'error'));
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -721,6 +759,7 @@ const Datos = {
       return await obtenerCliente().mutation('inventario:importar', { token: leerToken(), datos });
     }
     DB = Object.assign(dbVacia(), datos);
+    migrarResponsablesLocal(DB);
     listar('equipos').forEach(e => sincronizarUltMant(e.id));
     guardarDB();
   }
@@ -746,6 +785,11 @@ function datosDeEjemplo() {
     { id:id('us',2), nombre:'Ana María Ochoa', documento:'1002345678', cargo:'Auxiliar Administrativo', email:'admin@cnlaesperanza.com', telefono:'3009876543', rol:'Usuario', estado:'Activo' },
     { id:id('us',3), nombre:'Carlos Peña',     documento:'1098765432', cargo:'Terapeuta Ocupacional', email:'terapias@cnlaesperanza.com', telefono:'3015558899', rol:'Usuario', estado:'Activo' }
   ];
+  d.responsables = [
+    { id:id('rs',1), cedula:'1002345678', nombres:'Ana María Ochoa',  contacto:'3009876543', email:'recepcion@cnlaesperanza.com',  estado:'Activo' },
+    { id:id('rs',2), cedula:'1065812345', nombres:'Luis Vergara',     contacto:'3001234567', email:'sistemas@cnlaesperanza.com',   estado:'Activo' },
+    { id:id('rs',3), cedula:'1098765432', nombres:'Carlos Peña',      contacto:'3015558899', email:'psicologia@cnlaesperanza.com', estado:'Activo' }
+  ];
   d.proveedores = [
     { id:id('pr',1), nombre:'Compudata S.A.S.', nit:'900123456-1', contacto:'Jorge Rivas', telefono:'6055710001', email:'ventas@compudata.com', direccion:'Cra 9 # 14-22', estado:'Activo' },
     { id:id('pr',2), nombre:'TecnoCesar Ltda.', nit:'830998877-4', contacto:'Marcela Díaz', telefono:'6055710002', email:'contacto@tecnocesar.com', direccion:'Calle 20 # 7-15', estado:'Activo' }
@@ -764,19 +808,19 @@ function datosDeEjemplo() {
   ];
   d.equipos = [
     { id:uid(), idEquipo:'EQ-0001', fechaCompra:'2024-03-12', proveedorId:d.proveedores[0].id, sedeId:d.sedes[0].id,
-      areaId:d.areas[0].id, responsableId:d.usuarios[1].id, serialFabrica:'PF3KX9L2', serialExterno:'CNLE-INV-001',
+      areaId:d.areas[0].id, responsableId:d.responsables[0].id, serialFabrica:'PF3KX9L2', serialExterno:'CNLE-INV-001',
       tipoId:d.tiposEquipo[1].id, modelo:'ThinkCentre M70q', marcaId:d.marcas[0].id,
       detalleHardware:'Intel Core i5-12400 · 16 GB RAM DDR4 · SSD 512 GB · Monitor 22"',
       sistemaOperativo:'Windows 11 Pro', versionOffice:'Microsoft 365 Empresa', cuentaOffice:'admin@cnlaesperanza.com',
       vigenciaOffice:'2026-11-30', estado:'Activo', observaciones:'Equipo de recepción y facturación.' },
     { id:uid(), idEquipo:'EQ-0002', fechaCompra:'2023-08-05', proveedorId:d.proveedores[1].id, sedeId:d.sedes[0].id,
-      areaId:d.areas[3].id, responsableId:d.usuarios[0].id, serialFabrica:'5CD1234ABC', serialExterno:'CNLE-INV-002',
+      areaId:d.areas[3].id, responsableId:d.responsables[1].id, serialFabrica:'5CD1234ABC', serialExterno:'CNLE-INV-002',
       tipoId:d.tiposEquipo[0].id, modelo:'ProBook 450 G9', marcaId:d.marcas[2].id,
       detalleHardware:'Intel Core i7-1255U · 16 GB RAM · SSD 1 TB · Pantalla 15.6"',
       sistemaOperativo:'Windows 11 Pro', versionOffice:'Office 2021 Professional', cuentaOffice:'sistemas@cnlaesperanza.com',
       vigenciaOffice:'2026-10-15', estado:'Activo', observaciones:'Equipo del área de sistemas.' },
     { id:uid(), idEquipo:'EQ-0003', fechaCompra:'2022-01-20', proveedorId:d.proveedores[0].id, sedeId:d.sedes[1].id,
-      areaId:d.areas[2].id, responsableId:d.usuarios[2].id, serialFabrica:'DLXR77Q', serialExterno:'CNLE-INV-003',
+      areaId:d.areas[2].id, responsableId:d.responsables[2].id, serialFabrica:'DLXR77Q', serialExterno:'CNLE-INV-003',
       tipoId:d.tiposEquipo[2].id, modelo:'Inspiron 24 5410', marcaId:d.marcas[1].id,
       detalleHardware:'Intel Core i5-1235U · 8 GB RAM · SSD 256 GB · Todo en uno 23.8"',
       sistemaOperativo:'Windows 10 Pro', versionOffice:'Office 2019 Hogar y Empresas', cuentaOffice:'psicologia@cnlaesperanza.com',
@@ -814,7 +858,8 @@ const buscarId = (ent, id) => (DB[ent] || []).find(r => r.id === id);
 /* Cómo se nombra cada registro cuando aparece en un desplegable o en una tabla.
    La mayoría usa el campo "nombre"; los equipos necesitan una etiqueta compuesta. */
 const ETIQUETAS_REF = {
-  equipos: (e) => `${e.idEquipo} · ${nombreDe('marcas', e.marcaId)} ${e.modelo || ''}`.trim()
+  equipos: (e) => `${e.idEquipo} · ${nombreDe('marcas', e.marcaId)} ${e.modelo || ''}`.trim(),
+  responsables: (r) => r.nombres || '—'
 };
 const etiquetaRef = (ent, r) => !r ? '—'
   : (ETIQUETAS_REF[ent] ? ETIQUETAS_REF[ent](r) : (r.nombre || r.idEquipo || '—'));
@@ -834,7 +879,7 @@ const OPC_ESTADO = ['Activo', 'Inactivo'];
 const SCHEMAS = {
   usuarios: {
     titulo:'Usuarios', singular:'Usuario', icono:'users',
-    subtitulo:'Usuarios del sistema y responsables de equipos',
+    subtitulo:'Usuarios del sistema',
     columnas:[
       { k:'nombre', t:'Nombre completo', bold:true },
       { k:'documento', t:'Documento' },
@@ -950,6 +995,30 @@ const SCHEMAS = {
   }
 };
 
+/* Responsables: personas a cargo de cada equipo (no necesitan usar el sistema). */
+SCHEMAS.responsables = {
+  titulo:'Responsables', singular:'Responsable', icono:'responsable',
+  subtitulo:'Personas a cargo de los equipos de cómputo',
+  unicos:['cedula'],
+  descriptor:(r) => r.nombres || 'este responsable',
+  columnas:[
+    { k:'cedula', t:'Cédula', tipo:'codigo' },
+    { k:'nombres', t:'Nombres', bold:true },
+    { k:'contacto', t:'Contacto' },
+    { k:'email', t:'Correo' },
+    { k:'estado', t:'Estado', tipo:'chipEstado' }
+  ],
+  campos:[
+    { k:'cedula', l:'Cédula', t:'text', req:true, ph:'Ej: 1065812345',
+      help:'Número de documento. No se puede repetir.' },
+    { k:'nombres', l:'Nombres completos', t:'text', req:true, ph:'Ej: Ana María Ochoa Pérez' },
+    { k:'contacto', l:'Contacto', t:'tel', ph:'Teléfono o celular' },
+    { k:'email', l:'Correo electrónico', t:'email', ph:'responsable@cnlaesperanza.com' },
+    { k:'estado', l:'Estado', t:'select', opc:OPC_ESTADO, req:true, def:'Activo',
+      help:'Los responsables inactivos dejan de aparecer al registrar equipos.' }
+  ]
+};
+
 SCHEMAS.contratistas = {
   titulo:'Contratistas', singular:'Contratista', icono:'contratista',
   subtitulo:'Personas o empresas que ejecutan los mantenimientos',
@@ -1030,7 +1099,8 @@ const SCHEMA_EQUIPOS = {
     { g:'Ubicación y responsable' },
     { k:'sedeId', l:'Sede', t:'ref', ref:'sedes', req:true },
     { k:'areaId', l:'Área', t:'ref', ref:'areas', req:true, dependeDe:'sedeId', campoPadre:'sedeId' },
-    { k:'responsableId', l:'Responsable', t:'ref', ref:'usuarios', req:true },
+    { k:'responsableId', l:'Responsable', t:'ref', ref:'responsables', req:true,
+      help:'Persona a cargo del equipo. Se administra en el módulo Responsables.' },
 
     /* --- Características técnicas --- */
     { g:'Características técnicas' },
@@ -1228,6 +1298,7 @@ const VISTAS = [
   { id:'equipos', titulo:'Equipos de cómputo', sub:SCHEMA_EQUIPOS.subtitulo, icono:'equipo', grupo:'Principal' },
   { id:'mantenimientos', titulo:'Mantenimientos', sub:SCHEMAS.mantenimientos.subtitulo, icono:'mant', grupo:'Principal' },
   { id:'usuarios',    titulo:'Usuarios',            sub:SCHEMAS.usuarios.subtitulo,    icono:'users', grupo:'Administración' },
+  { id:'responsables',titulo:'Responsables',        sub:SCHEMAS.responsables.subtitulo,icono:'responsable', grupo:'Administración' },
   { id:'proveedores', titulo:'Proveedores',         sub:SCHEMAS.proveedores.subtitulo, icono:'truck', grupo:'Administración' },
   { id:'sedes',       titulo:'Sedes',               sub:SCHEMAS.sedes.subtitulo,       icono:'sede',  grupo:'Administración' },
   { id:'areas',       titulo:'Áreas de la empresa', sub:SCHEMAS.areas.subtitulo,       icono:'area',  grupo:'Administración' },
@@ -1423,7 +1494,11 @@ function abrirFormulario(entidad, schema, registro, preset) {
     });
   });
 
-  setTimeout(() => { const f = $('#formEnt input, #formEnt select'); if (f) f.focus(); }, 60);
+  setTimeout(() => {
+    const form = $('#formEnt');
+    if (!form || form.contains(document.activeElement)) return;   // no robar el foco si ya se está escribiendo
+    const f = $('#formEnt input, #formEnt select'); if (f) f.focus();
+  }, 60);
 }
 
 /** Valida y guarda el formulario abierto. */
@@ -1490,7 +1565,7 @@ const DEPENDENCIAS = {
   proveedores: [['equipos', 'proveedorId']],
   sedes:       [['equipos', 'sedeId'], ['areas', 'sedeId']],
   areas:       [['equipos', 'areaId']],
-  usuarios:    [['equipos', 'responsableId']],
+  responsables:[['equipos', 'responsableId']],
   contratistas:[['mantenimientos', 'contratistaId']],
   tiposEquipo: [['equipos', 'tipoId']],
   marcas:      [['equipos', 'marcaId']]
@@ -1733,7 +1808,7 @@ function equiposFiltrados() {
                    e.sistemaOperativo, e.versionOffice, e.cuentaOffice, e.observaciones,
                    nombreDe('marcas', e.marcaId), nombreDe('tiposEquipo', e.tipoId),
                    nombreDe('sedes', e.sedeId), nombreDe('areas', e.areaId),
-                   nombreDe('usuarios', e.responsableId), nombreDe('proveedores', e.proveedorId)].join(' ');
+                   nombreDe('responsables', e.responsableId), nombreDe('proveedores', e.proveedorId)].join(' ');
     return norm(texto).includes(norm(fEq.q));
   });
 }
@@ -1826,7 +1901,7 @@ function renderEquipos() {
                   <p class="text-slate-700">${esc(nombreDe('sedes', e.sedeId))}</p>
                   <p class="text-[11px] text-slate-400">${esc(nombreDe('areas', e.areaId))}</p>
                 </td>
-                <td class="text-slate-600">${esc(nombreDe('usuarios', e.responsableId))}</td>
+                <td class="text-slate-600">${esc(nombreDe('responsables', e.responsableId))}</td>
                 <td><span class="font-mono text-[12px] text-slate-600">${esc(e.serialFabrica)}</span></td>
                 <td><span class="chip ${um.clase}">${esc(um.texto)}</span>
                     ${um.nota ? `<span class="block text-[11px] text-slate-400 mt-0.5">${esc(um.nota)}</span>` : ''}</td>
@@ -1889,7 +1964,7 @@ function verFichaEquipo(e) {
       ${fila('Proveedor', esc(nombreDe('proveedores', e.proveedorId)))}
       ${fila('Sede', esc(nombreDe('sedes', e.sedeId)))}
       ${fila('Área', esc(nombreDe('areas', e.areaId)))}
-      ${fila('Responsable', esc(nombreDe('usuarios', e.responsableId)))}
+      ${fila('Responsable', esc(nombreDe('responsables', e.responsableId)))}
       ${fila('Tipo de equipo', esc(nombreDe('tiposEquipo', e.tipoId)))}
       ${fila('Marca', esc(nombreDe('marcas', e.marcaId)))}
       ${fila('Modelo', esc(e.modelo))}
@@ -2065,7 +2140,7 @@ function renderPanel() {
               <tr>
                 <td><span class="font-mono font-bold text-brand-700">${esc(e.idEquipo)}</span>
                     <span class="text-slate-500 text-xs block">${esc(nombreDe('marcas', e.marcaId))} ${esc(e.modelo)}</span></td>
-                <td class="text-slate-600">${esc(nombreDe('usuarios', e.responsableId))}</td>
+                <td class="text-slate-600">${esc(nombreDe('responsables', e.responsableId))}</td>
                 <td class="text-slate-600 text-xs">${esc(e.cuentaOffice || '—')}</td>
                 <td><span class="chip ${d < 0 ? 'chip-bad' : 'chip-warn'}">
                     ${d < 0 ? `Vencida hace ${Math.abs(d)} día(s)` : `Vence en ${d} día(s)`}</span>
@@ -2078,7 +2153,7 @@ function renderPanel() {
       <div class="bg-white rounded-xl border border-slate-200 p-4">
         <h3 class="font-extrabold text-sm text-slate-800 mb-3">Datos maestros</h3>
         <div class="space-y-1.5">
-          ${['usuarios','proveedores','sedes','areas','tiposEquipo','marcas'].map(k => `
+          ${['usuarios','responsables','proveedores','sedes','areas','tiposEquipo','marcas'].map(k => `
             <button data-goto="${k}"
                     class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-brand-50 text-left transition">
               <span class="w-7 h-7 grid place-items-center rounded-lg bg-brand-50 text-brand-600 shrink-0">
@@ -2184,7 +2259,7 @@ function exportarEquiposCSV(datos) {
                'Mantenimientos','Fecha último mantenimiento'];
   const filas = datos.map(e => [
     e.idEquipo, fFecha(e.fechaCompra), nombreDe('proveedores', e.proveedorId),
-    nombreDe('sedes', e.sedeId), nombreDe('areas', e.areaId), nombreDe('usuarios', e.responsableId),
+    nombreDe('sedes', e.sedeId), nombreDe('areas', e.areaId), nombreDe('responsables', e.responsableId),
     e.serialFabrica, e.serialExterno, nombreDe('tiposEquipo', e.tipoId), e.modelo,
     nombreDe('marcas', e.marcaId), e.detalleHardware, e.sistemaOperativo, e.versionOffice,
     e.cuentaOffice, fFecha(e.vigenciaOffice), e.estado, e.observaciones,

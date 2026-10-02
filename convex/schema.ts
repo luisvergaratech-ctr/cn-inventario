@@ -24,6 +24,7 @@ function tablaDe(campos: readonly string[]) {
 
 export default defineSchema({
   usuarios:       tablaDe(CAMPOS.usuarios),
+  responsables:   tablaDe(CAMPOS.responsables),
   proveedores:    tablaDe(CAMPOS.proveedores),
   sedes:          tablaDe(CAMPOS.sedes),
   areas:          tablaDe(CAMPOS.areas),
