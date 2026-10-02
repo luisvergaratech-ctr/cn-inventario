@@ -53,6 +53,22 @@
   }
 </script>
 
+<!-- ============================================================
+     CONEXIÓN CON LA BASE DE DATOS EN LA NUBE (Convex)
+     ------------------------------------------------------------
+     Pegue aquí la URL de su proyecto Convex (la muestra el comando
+     "npx convex deploy" o el panel de Convex > Settings > URL & Deploy Key).
+     Ejemplo:  const CONVEX_URL = 'https://feliz-gato-123.convex.cloud';
+
+     Si se deja vacía, la aplicación funciona en MODO LOCAL: los datos
+     se guardan solo en este navegador (localStorage), como antes.
+     ============================================================ -->
+<script>
+  const CONVEX_URL = 'https://adventurous-chameleon-991.convex.cloud';
+</script>
+<!-- Cliente de Convex para navegador (expone la variable global "convex") -->
+<script src="https://unpkg.com/convex@1/dist/browser.bundle.js"></script>
+
 <!-- Tipografía institucional -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -62,7 +78,7 @@
   /* ===========================================================
      ESTILOS PROPIOS  (complementan a Tailwind)
      =========================================================== */
-  /* La aplicación usa una identidad institucional clara (azul-blanco-rojo)
+  /* La aplicación usa una identidad institucional clara (verde-blanco-rojo)
      en ambos temas del sistema: se fuerza el esquema claro para que los
      controles nativos (fechas, listas) conserven el mismo aspecto. */
   :root{
@@ -384,6 +400,15 @@
         </div>
 
         <div class="ml-auto flex items-center gap-2">
+          <!-- Indica dónde se están guardando los datos (nube o solo este navegador) -->
+          <span class="hidden sm:block"><span id="modoDatos" class="chip chip-off"></span></span>
+          <button id="btnImport" class="btn btn-ghost !py-1.5 !px-2.5 text-xs" title="Importar o restaurar datos (JSON)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 15V3m0 0 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="hidden sm:inline">Importar</span>
+          </button>
           <button id="btnBackup" class="btn btn-ghost !py-1.5 !px-2.5 text-xs" title="Descargar copia de seguridad (JSON)">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
@@ -428,6 +453,14 @@
     </div>
     <div id="modalBody" class="px-5 py-4 overflow-y-auto"></div>
     <div id="modalFooter" class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2"></div>
+  </div>
+</div>
+
+<!-- Pantalla de espera mientras se conecta con la base de datos en la nube -->
+<div id="cargando" class="hidden fixed inset-0 z-[70] bg-white grid place-items-center">
+  <div class="text-center">
+    <div class="w-10 h-10 mx-auto rounded-full border-4 border-brand-100 border-t-brand-600 animate-spin"></div>
+    <p class="mt-4 text-sm font-semibold text-slate-600">Conectando con la base de datos…</p>
   </div>
 </div>
 
@@ -568,6 +601,130 @@ function cargarDB() {
   listar('equipos').forEach(e => sincronizarUltMant(e.id));
   guardarDB();
 }
+
+/* ---------------------------------------------------------------
+   B.2  CONEXIÓN CON CONVEX (modo nube)
+   En modo nube, DB es una copia en memoria de lo que hay en el
+   servidor: se llena con la suscripción "inventario:listar" y se
+   actualiza sola cada vez que alguien, desde cualquier equipo,
+   guarda o elimina algo. Toda escritura pasa por el objeto Datos.
+   --------------------------------------------------------------- */
+const MODO_NUBE = typeof CONVEX_URL === 'string' && CONVEX_URL.trim() !== '';
+const TOKEN_KEY = 'cnle_token';
+let clienteConvex = null;
+let cancelarSuscripcion = null;
+
+const leerToken = () => {
+  try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || ''; }
+  catch (e) { return ''; }
+};
+const guardarToken = (token, recordar) => {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    if (recordar) localStorage.setItem(TOKEN_KEY, token);
+  } catch (e) { /* almacenamiento bloqueado: la sesión dura lo que dure la pestaña */ }
+};
+const borrarToken = () => {
+  try { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+};
+
+/** Crea el cliente de Convex (una sola vez). */
+function obtenerCliente() {
+  if (clienteConvex) return clienteConvex;
+  if (typeof convex === 'undefined' || !convex.ConvexClient)
+    throw new Error('No se pudo cargar la librería de Convex. Verifique la conexión a internet.');
+  clienteConvex = new convex.ConvexClient(CONVEX_URL.trim());
+  return clienteConvex;
+}
+
+/** Extrae un mensaje legible de un error devuelto por Convex. */
+function mensajeError(e) {
+  if (e && typeof e.data === 'string') return e.data;          // ConvexError del servidor
+  const m = String((e && e.message) || e || 'Error desconocido');
+  if (/fetch|network|websocket|conex/i.test(m)) return 'No fue posible comunicarse con el servidor. Revise la conexión a internet.';
+  return m;
+}
+
+/** Se suscribe a los datos del inventario usando el token guardado. */
+function conectarNube() {
+  const token = leerToken();
+  if (!token) { mostrarLogin(); return; }
+  $('#cargando').classList.remove('hidden');
+  try {
+    if (cancelarSuscripcion) cancelarSuscripcion();
+    cancelarSuscripcion = obtenerCliente().onUpdate('inventario:listar', { token }, alRecibirDatos, (err) => {
+      $('#cargando').classList.add('hidden');
+      toast(mensajeError(err), 'error');
+      mostrarLogin();
+    });
+  } catch (e) {
+    $('#cargando').classList.add('hidden');
+    mostrarLogin();
+    mostrarLoginError(mensajeError(e));
+  }
+}
+
+/** Se ejecuta cada vez que llegan datos nuevos del servidor. */
+function alRecibirDatos(datos) {
+  $('#cargando').classList.add('hidden');
+  if (datos === null) {                     // token vencido o inválido
+    borrarToken();
+    if (cancelarSuscripcion) { cancelarSuscripcion(); cancelarSuscripcion = null; }
+    const estabaDentro = !$('#appScreen').classList.contains('hidden');
+    mostrarLogin();
+    if (estabaDentro) mostrarLoginError('La sesión venció. Inicie sesión nuevamente.');
+    return;
+  }
+  DB = Object.assign(dbVacia(), datos);
+  if ($('#appScreen').classList.contains('hidden')) entrarApp();
+  else refrescarVista();
+}
+
+/* ---------------------------------------------------------------
+   B.3  OPERACIONES DE ESCRITURA (funcionan igual en ambos modos)
+   --------------------------------------------------------------- */
+const Datos = {
+  /** Crea o actualiza un registro completo (debe traer su id). */
+  async guardar(entidad, registro) {
+    if (MODO_NUBE) {
+      await obtenerCliente().mutation('inventario:guardar', { token: leerToken(), tabla: entidad, registro });
+      return;
+    }
+    const existente = buscarId(entidad, registro.id);
+    const equipoAnterior = existente ? existente.equipoId : null;
+    if (existente) Object.assign(existente, registro);
+    else DB[entidad].push(registro);
+    if (entidad === 'mantenimientos') {
+      sincronizarUltMant(registro.equipoId);
+      if (equipoAnterior && equipoAnterior !== registro.equipoId) sincronizarUltMant(equipoAnterior);
+    }
+    if (entidad === 'equipos') sincronizarUltMant(registro.id);
+    guardarDB();
+  },
+
+  /** Elimina un registro (y, si es un equipo, su historial de mantenimientos). */
+  async eliminar(entidad, id) {
+    if (MODO_NUBE) {
+      await obtenerCliente().mutation('inventario:eliminar', { token: leerToken(), tabla: entidad, id });
+      return;
+    }
+    const reg = buscarId(entidad, id);
+    DB[entidad] = DB[entidad].filter(r => r.id !== id);
+    if (entidad === 'equipos') DB.mantenimientos = DB.mantenimientos.filter(m => m.equipoId !== id);
+    if (entidad === 'mantenimientos' && reg) sincronizarUltMant(reg.equipoId);
+    guardarDB();
+  },
+
+  /** Reemplaza TODOS los datos por los recibidos (importar / restaurar respaldo). */
+  async importar(datos) {
+    if (MODO_NUBE) {
+      return await obtenerCliente().mutation('inventario:importar', { token: leerToken(), datos });
+    }
+    DB = Object.assign(dbVacia(), datos);
+    listar('equipos').forEach(e => sincronizarUltMant(e.id));
+    guardarDB();
+  }
+};
 
 /* ---- Datos de ejemplo: permiten probar la aplicación de inmediato ---- */
 function datosDeEjemplo() {
@@ -855,7 +1012,7 @@ const SCHEMA_EQUIPOS = {
   titulo:'Equipos de cómputo', singular:'Equipo', icono:'equipo',
   subtitulo:'Registro y control del parque tecnológico institucional',
   descriptor:(r) => `el equipo ${etiquetaRef('equipos', r)}`,
-  unicos:['idEquipo'],
+  unicos:['idEquipo', 'serialFabrica'],
   campos:[
     /* --- Identificación --- */
     { g:'Identificación del equipo' },
@@ -904,10 +1061,15 @@ const esquemaDe = (ent) => (ent === 'equipos') ? SCHEMA_EQUIPOS : SCHEMAS[ent];
 /* ===============================================================
    D. AUTENTICACIÓN Y SESIÓN
    =============================================================== */
-const CRED = { usuario:'Admin', clave:'95131131' };   // Credenciales por defecto
+/* MODO NUBE: la contraseña se valida en el servidor (variable ADMIN_CLAVE de
+   Convex) y nunca aparece en este archivo.
+   MODO LOCAL: se usa esta credencial de prueba. Cualquiera que abra el código
+   fuente puede verla, así que NO use esta misma clave como ADMIN_CLAVE. */
+const CRED_LOCAL = { usuario:'Admin', clave:'95131131' };
 const SESION_KEY = 'cnle_sesion';
 
 function haySesion() {
+  if (MODO_NUBE) return !!leerToken();
   return sessionStorage.getItem(SESION_KEY) === 'ok' ||
          localStorage.getItem(SESION_KEY) === 'ok';
 }
@@ -915,10 +1077,22 @@ function abrirSesion(recordar) {
   sessionStorage.setItem(SESION_KEY, 'ok');
   if (recordar) localStorage.setItem(SESION_KEY, 'ok');
 }
-function cerrarSesion() {
+async function cerrarSesion() {
+  if (MODO_NUBE) {
+    const token = leerToken();
+    borrarToken();
+    try { await obtenerCliente().mutation('acceso:cerrarSesion', { token }); } catch (e) {}
+  }
   sessionStorage.removeItem(SESION_KEY);
   localStorage.removeItem(SESION_KEY);
   location.reload();
+}
+
+/** Muestra la pantalla de inicio de sesión y oculta la aplicación. */
+function mostrarLogin() {
+  $('#appScreen').classList.add('hidden');
+  $('#loginScreen').classList.remove('hidden');
+  setTimeout(() => $('#loginUser').focus(), 30);
 }
 
 function mostrarLoginError(msg) {
@@ -929,21 +1103,45 @@ function mostrarLoginError(msg) {
 }
 
 function initLogin() {
-  $('#loginForm').addEventListener('submit', (e) => {
+  $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const u = $('#loginUser').value.trim();
     const p = $('#loginPass').value;
+    const recordar = $('#loginRemember').checked;
+    const rechazar = (msg) => {
+      mostrarLoginError(msg);
+      $('#loginPass').value = '';
+      $('#loginPass').focus();
+    };
 
     if (!u || !p) { mostrarLoginError('Debe diligenciar usuario y contraseña.'); return; }
 
-    // Validación de credenciales (comparación sin distinguir mayúsculas en el usuario)
-    if (u.toLowerCase() !== CRED.usuario.toLowerCase() || p !== CRED.clave) {
-      mostrarLoginError('Usuario o contraseña incorrectos. Verifique e intente nuevamente.');
-      $('#loginPass').value = '';
-      $('#loginPass').focus();
+    /* --- Modo nube: el servidor valida la clave y entrega un token de sesión --- */
+    if (MODO_NUBE) {
+      const btn = $('#loginForm button[type="submit"]');
+      btn.disabled = true; btn.style.opacity = '.7';
+      try {
+        const r = await obtenerCliente().mutation('acceso:iniciarSesion', { usuario: u, clave: p, recordar });
+        if (!r.ok) { rechazar(r.mensaje); return; }
+        $('#loginError').classList.add('hidden');
+        $('#loginPass').value = '';
+        guardarToken(r.token, recordar);
+        if (r.usuario) $('#sessionUser').textContent = r.usuario;
+        conectarNube();
+      } catch (err) {
+        mostrarLoginError(mensajeError(err));
+      } finally {
+        btn.disabled = false; btn.style.opacity = '';
+      }
       return;
     }
-    abrirSesion($('#loginRemember').checked);
+
+    /* --- Modo local: comparación con la credencial de prueba --- */
+    if (u.toLowerCase() !== CRED_LOCAL.usuario.toLowerCase() || p !== CRED_LOCAL.clave) {
+      rechazar('Usuario o contraseña incorrectos. Verifique e intente nuevamente.');
+      return;
+    }
+    abrirSesion(recordar);
     entrarApp();
   });
 
@@ -1080,6 +1278,26 @@ function irA(id) {
   window.scrollTo({ top: 0 });
 }
 
+/** Vuelve a dibujar la vista actual sin mover el scroll ni perder el foco
+    del buscador (se usa cuando llegan cambios hechos desde otro equipo). */
+function refrescarVista() {
+  const activo = document.activeElement;
+  const idActivo = activo && activo.id && $('#main').contains(activo) ? activo.id : null;
+  const pos = idActivo && activo.selectionStart != null ? activo.selectionStart : null;
+  const y = window.scrollY;
+
+  if (vistaActual === 'panel')        renderPanel();
+  else if (vistaActual === 'equipos') renderEquipos();
+  else                                renderEntidad(vistaActual);
+  actualizarBadges();
+
+  window.scrollTo({ top: y });
+  if (idActivo && $('#' + idActivo)) {
+    const el = $('#' + idActivo); el.focus();
+    if (pos != null && el.setSelectionRange) el.setSelectionRange(pos, pos);
+  }
+}
+
 function cerrarSidebar() {
   $('#sidebar').classList.add('-translate-x-full');
   $('#overlay').classList.add('hidden');
@@ -1181,7 +1399,7 @@ function abrirFormulario(entidad, schema, registro, preset) {
   btnSave.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
       <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       ${esNuevo ? 'Guardar registro' : 'Actualizar registro'}`;
-  btnSave.onclick = () => guardarFormulario(entidad, schema, registro);
+  btnSave.onclick = () => guardarFormulario(entidad, schema, registro, btnSave);
 
   abrirModal({
     titulo: `${esNuevo ? 'Nuevo' : 'Editar'} ${schema.singular.toLowerCase()}`,
@@ -1209,31 +1427,33 @@ function abrirFormulario(entidad, schema, registro, preset) {
 }
 
 /** Valida y guarda el formulario abierto. */
-function guardarFormulario(entidad, schema, registro) {
+async function guardarFormulario(entidad, schema, registro, btnSave) {
   const form = $('#formEnt');
   const err = $('#formError');
-  const equipoAnterior = registro ? registro.equipoId : null;
   const datos = {};
-  let faltante = null;
+  let faltante = null, invalido = null;
+  const mostrarError = (msg, k) => {
+    err.textContent = msg;
+    err.classList.remove('hidden');
+    const el = k && form.elements[k]; if (el) el.focus();
+  };
 
   schema.campos.filter(c => !c.g).forEach(c => {
     const el = form.elements[c.k];
     const v = el ? String(el.value).trim() : '';
     datos[c.k] = v;
     if (c.req && !v && !faltante) faltante = c;
+    // Formato de correo (los campos type="email" no se validaban antes)
+    if (v && c.t === 'email' && el && !el.checkValidity() && !invalido) invalido = c;
   });
 
-  if (faltante) {
-    err.textContent = `El campo “${faltante.l}” es obligatorio.`;
-    err.classList.remove('hidden');
-    const el = form.elements[faltante.k]; if (el) el.focus();
-    return;
-  }
+  if (faltante) { mostrarError(`El campo “${faltante.l}” es obligatorio.`, faltante.k); return; }
+  if (invalido) { mostrarError(`El campo “${invalido.l}” no tiene un correo válido.`, invalido.k); return; }
 
   // Validación de unicidad: cada esquema declara qué campos no pueden repetirse.
   const unicos = schema.unicos || (schema.sinNombre ? [] : ['nombre']);
   for (const k of unicos) {
-    const dup = DB[entidad].find(r => norm(r[k]) === norm(datos[k]) &&
+    const dup = datos[k] && DB[entidad].find(r => norm(r[k]) === norm(datos[k]) &&
                                       (!registro || r.id !== registro.id));
     if (dup) {
       const campo = schema.campos.find(c => c.k === k);
@@ -1244,22 +1464,24 @@ function guardarFormulario(entidad, schema, registro) {
     }
   }
 
-  if (registro) {
-    Object.assign(registro, datos);
-    toast(`${schema.singular} actualizado correctamente.`, 'ok');
-  } else {
-    DB[entidad].push(Object.assign({ id: uid(), creado: new Date().toISOString() }, datos));
-    toast(`${schema.singular} registrado correctamente.`, 'ok');
-  }
-  // Mantiene coherente la fecha de último mantenimiento del equipo afectado.
-  if (entidad === 'mantenimientos') {
-    sincronizarUltMant(datos.equipoId);
-    if (equipoAnterior && equipoAnterior !== datos.equipoId) sincronizarUltMant(equipoAnterior);
+  // Registro completo que se envía a la capa de datos (local o nube).
+  const completo = registro
+    ? Object.assign({}, registro, datos)
+    : Object.assign({ id: uid(), creado: new Date().toISOString() }, datos);
+
+  if (btnSave) { btnSave.disabled = true; btnSave.style.opacity = '.7'; }
+  try {
+    await Datos.guardar(entidad, completo);
+  } catch (e) {
+    mostrarError(mensajeError(e));
+    return;
+  } finally {
+    if (btnSave) { btnSave.disabled = false; btnSave.style.opacity = ''; }
   }
 
-  guardarDB();
+  toast(`${schema.singular} ${registro ? 'actualizado' : 'registrado'} correctamente.`, 'ok');
   cerrarModal();
-  irA(vistaActual);
+  refrescarVista();
 }
 
 /* Qué otras colecciones apuntan a cada entidad. Si hay registros que dependen
@@ -1316,12 +1538,14 @@ function eliminarRegistro(entidad, schema, registro) {
             (mantAsociados ? `<br><br>Se eliminará también su historial de
                <b>${mantAsociados}</b> mantenimiento(s).` : '') +
             `<br><br>Esta acción no se puede deshacer.`,
-    onOk: () => {
-      DB[entidad] = DB[entidad].filter(r => r.id !== registro.id);
-      if (entidad === 'equipos')
-        DB.mantenimientos = DB.mantenimientos.filter(m => m.equipoId !== registro.id);
-      if (entidad === 'mantenimientos') sincronizarUltMant(registro.equipoId);
-      guardarDB(); irA(vistaActual);
+    onOk: async () => {
+      try {
+        await Datos.eliminar(entidad, registro.id);
+      } catch (e) {
+        toast(mensajeError(e), 'error');
+        return;
+      }
+      refrescarVista();
       toast(`${schema.singular} eliminado.`, 'info');
     }
   });
@@ -1802,6 +2026,15 @@ function renderPanel() {
       </button>
     </div>
 
+    ${Object.values(DB).every(a => !a || a.length === 0) ? `
+    <!-- Aviso de base vacía -->
+    <div class="bg-white rounded-xl border border-dashed border-brand-300 p-4 flex flex-wrap items-center gap-3">
+      <p class="text-sm text-slate-600 flex-1 min-w-[14rem]">
+        <b class="text-slate-800">La base de datos está vacía.</b>
+        Puede subir los datos que tenía en este navegador, restaurar un respaldo o cargar los datos de ejemplo.</p>
+      <button id="pnlImportar" class="btn btn-primary">Importar datos</button>
+    </div>` : ''}
+
     <!-- Indicadores -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       ${kpi('Equipos registrados', eq.length, 'Total en inventario', 'bg-brand-600 text-white',
@@ -1891,7 +2124,9 @@ function renderPanel() {
                   ['Dados de baja', baja, 'bg-accent-500']]
                  .filter(x => x[1] > 0), Math.max(1, eq.length), 'bg-brand-500')}
         <p class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100">
-          Los datos se almacenan localmente en este navegador (localStorage).
+          ${MODO_NUBE
+            ? 'Los datos se guardan en la nube (Convex) y se ven en cualquier equipo con sesión iniciada.'
+            : 'Los datos se almacenan solo en este navegador (localStorage).'}
           Use el botón <b>Respaldo</b> para descargar una copia en formato JSON.</p>
       </div>
 
@@ -1917,6 +2152,7 @@ function renderPanel() {
 
   $('#pnlNuevo').onclick = () => abrirFormulario('equipos', SCHEMA_EQUIPOS, null);
   $('#pnlVerMant').onclick = () => irA('mantenimientos');
+  if ($('#pnlImportar')) $('#pnlImportar').onclick = abrirImportar;
   $$('[data-goto]').forEach(b => b.onclick = () => irA(b.dataset.goto));
 }
 
@@ -1965,11 +2201,123 @@ function descargarRespaldo() {
   toast('Copia de seguridad descargada.', 'ok');
 }
 
+/* ---------------------------------------------------------------
+   H.2  IMPORTAR / RESTAURAR DATOS
+   Tres orígenes posibles: un archivo de respaldo JSON, los datos que
+   quedaron guardados en este navegador (útil al pasar a la nube) o
+   los datos de ejemplo. En todos los casos se REEMPLAZA lo existente.
+   --------------------------------------------------------------- */
+const contarRegistros = (d) => Object.keys(dbVacia()).reduce((s, k) => s + ((d[k] || []).length), 0);
+
+/** Valida un objeto de respaldo y lo convierte a la estructura actual. */
+function prepararImportacion(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj))
+    throw new Error('El archivo no tiene el formato de un respaldo del inventario.');
+  const claves = Object.keys(dbVacia());
+  if (!claves.some(k => Array.isArray(obj[k])))
+    throw new Error('El archivo no contiene ninguna de las tablas del inventario.');
+  // Respaldos de la versión 1 (sin Contratistas) se convierten automáticamente.
+  const esV1 = !Array.isArray(obj.contratistas) ||
+               (obj.mantenimientos || []).some(m => m && m.tecnicoId && !m.contratistaId);
+  const base = esV1 ? migrarDesdeV1(obj) : obj;
+  const limpio = dbVacia();
+  claves.forEach(k => { if (Array.isArray(base[k])) limpio[k] = base[k]; });
+  return limpio;
+}
+
+function abrirImportar() {
+  const enNavegador = MODO_NUBE ? (leerClave(DB_KEY) || leerClave(DB_KEY_ANTERIOR)) : null;
+  const opcion = (id, titulo, desc, deshabilitada) => `
+    <button id="${id}" ${deshabilitada ? 'disabled' : ''}
+            class="w-full text-left border border-slate-200 rounded-xl p-3.5 hover:border-brand-400 hover:bg-brand-50
+                   transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white">
+      <p class="font-bold text-sm text-slate-800">${titulo}</p>
+      <p class="text-xs text-slate-500 mt-0.5">${desc}</p>
+    </button>`;
+
+  const cuerpo = `
+    <div class="space-y-2.5">
+      ${opcion('impArchivo', 'Archivo de respaldo (.json)',
+               'Restaura una copia descargada con el botón Respaldo.')}
+      ${MODO_NUBE ? opcion('impNavegador', 'Datos guardados en este navegador',
+               enNavegador ? `Sube a la nube los ${contarRegistros(Object.assign(dbVacia(), enNavegador))} registros que la versión anterior guardó en este equipo.`
+                           : 'No se encontraron datos de la versión anterior en este navegador.',
+               !enNavegador) : ''}
+      ${opcion('impEjemplo', 'Datos de ejemplo',
+               'Carga sedes, equipos y mantenimientos de prueba para practicar.')}
+      <input id="impFile" type="file" accept=".json,application/json" class="hidden">
+      <p class="text-[11px] text-slate-500 pt-1">
+        <b class="text-accent-600">Importante:</b> la importación reemplaza todos los datos actuales.
+        Descargue un <b>Respaldo</b> antes si los necesita.</p>
+    </div>`;
+
+  const bCerrar = document.createElement('button');
+  bCerrar.className = 'btn btn-ghost'; bCerrar.textContent = 'Cancelar'; bCerrar.onclick = cerrarModal;
+  abrirModal({
+    titulo:'Importar datos', ancho:'max-w-lg',
+    desc: MODO_NUBE ? 'Los datos se cargarán en la base de datos en la nube.'
+                    : 'Los datos se cargarán en este navegador.',
+    icono:`<span class="w-9 h-9 grid place-items-center rounded-full bg-brand-50 text-brand-600">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+               <path d="M12 15V3m0 0 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                     stroke-linecap="round" stroke-linejoin="round"/></svg></span>`,
+    cuerpo, pie:[bCerrar]
+  });
+
+  const continuar = (obj, origen) => {
+    let datos;
+    try { datos = prepararImportacion(obj); }
+    catch (e) { toast(e.message, 'error'); return; }
+    confirmarImportacion(datos, origen);
+  };
+
+  $('#impArchivo').onclick = () => $('#impFile').click();
+  $('#impFile').onchange = async (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    try { continuar(JSON.parse(await f.text()), `el archivo «${f.name}»`); }
+    catch (e) { toast('No se pudo leer el archivo: no es un JSON válido.', 'error'); }
+  };
+  if ($('#impNavegador')) $('#impNavegador').onclick = () => continuar(enNavegador, 'este navegador');
+  $('#impEjemplo').onclick = () => continuar(datosDeEjemplo(), 'los datos de ejemplo');
+}
+
+function confirmarImportacion(datos, origen) {
+  const nuevos = contarRegistros(datos);
+  const actuales = contarRegistros(DB);
+  confirmar({
+    titulo:'Reemplazar datos', textoOk:'Importar',
+    mensaje:`Se cargarán <b>${nuevos}</b> registro(s) desde ${esc(origen)}
+             (${datos.equipos.length} equipo(s) y ${datos.mantenimientos.length} mantenimiento(s)).<br><br>
+             ${actuales ? `Los <b>${actuales}</b> registro(s) actuales se eliminarán.<br><br>` : ''}
+             ¿Desea continuar?`,
+    onOk: async () => {
+      $('#cargando').classList.remove('hidden');
+      try {
+        await Datos.importar(datos);
+        toast(`Importación completa: ${nuevos} registro(s).`, 'ok');
+        irA('panel');
+      } catch (e) {
+        toast(mensajeError(e), 'error');
+      } finally {
+        $('#cargando').classList.add('hidden');
+      }
+    }
+  });
+}
+
 /* ===============================================================
    I. ARRANQUE DE LA APLICACIÓN
    =============================================================== */
 function init() {
-  cargarDB();
+  // En modo local los datos vienen del navegador; en modo nube llegan por la suscripción.
+  if (!MODO_NUBE) cargarDB();
+
+  const modo = $('#modoDatos');
+  modo.textContent = MODO_NUBE ? 'En la nube' : 'Solo este navegador';
+  modo.className = `chip ${MODO_NUBE ? 'chip-ok' : 'chip-warn'}`;
+  modo.title = MODO_NUBE ? 'Los datos se guardan en Convex y se ven desde cualquier equipo.'
+                         : 'Modo local: configure CONVEX_URL para guardar en la nube.';
 
   // Logos y año en curso
   $('#logoBoxLogin').innerHTML = logoHTML(44);
@@ -1988,6 +2336,7 @@ function init() {
     onOk: cerrarSesion
   });
   $('#btnBackup').onclick   = descargarRespaldo;
+  $('#btnImport').onclick   = abrirImportar;
   $('#openSidebar').onclick = abrirSidebar;
   $('#closeSidebar').onclick = cerrarSidebar;
   $('#overlay').onclick     = cerrarSidebar;
@@ -2000,7 +2349,10 @@ function init() {
   });
 
   // Si ya había una sesión abierta, entra directamente
-  if (haySesion()) entrarApp();
+  if (MODO_NUBE) {
+    if (haySesion()) conectarNube();     // entra cuando llegan los datos del servidor
+    else $('#loginUser').focus();
+  } else if (haySesion()) entrarApp();
   else $('#loginUser').focus();
 }
 

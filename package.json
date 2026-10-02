@@ -1,0 +1,12 @@
+{
+  "name": "cn-inventario",
+  "private": true,
+  "description": "Registro y control de equipos de cómputo - Centro de Neurodesarrollo La Esperanza",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.25.0"
+  }
+}
